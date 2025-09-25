@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/><title>Reglas de negocio</title></head>
+<body>
+  <h2>Reglas de negocio</h2>
+  <form id="f">
+    <input name="key" placeholder="Clave (ej: descuento)" required />
+    <input name="value" placeholder="Valor (ej: 10%)" required />
+    <button>Agregar</button>
+  </form>
+  <ul id="list"></ul>
+<script>
+async function load(){
+  const res = await fetch('/api/business_rules');
+  const data = await res.json();
+  const list = document.getElementById('list'); list.innerHTML='';
+  data.forEach(r=>{
+    const li = document.createElement('li');
+    li.textContent = r.key + ' : ' + r.value;
+    list.appendChild(li);
+  });
+}
+document.getElementById('f').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const f = e.target;
+  await fetch('/api/business_rules',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key: f.key.value, value: f.value.value })});
+  f.reset(); load();
+});
+load();
+</script>
+</body></html>
