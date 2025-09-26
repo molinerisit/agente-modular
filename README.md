@@ -1,22 +1,8 @@
-# Agri Bot - Full (demo)
-
-Proyecto demo con:
-- Inicialización automática de tablas en las dos bases (BOT y BUSINESS).
-- CRUD para productos, reservas y reglas.
-- Página de configuración que muestra *todo* lo que el bot puede ver.
-- Chat que utiliza OpenAI (necesitas API key).
-
+Agri Bot - Rules Full
+---------------------
+Proyecto demo con motor de reglas (separado por modo sales / reservations), CRUD de reglas y precarga.
 Instrucciones:
-1. Copiar .env.example -> .env y completar las variables.
-2. npm install
-3. npm run dev
-4. Abrir http://localhost:3000
-
-Endpoints/UI:
-- /                 -> Chat
-- /products.html    -> Gestionar productos
-- /reservations.html-> Gestionar reservas
-- /rules.html       -> Gestionar reglas
-- /config.html      -> Panel que muestra datos que el bot ve
-
-Nota: Este proyecto es demo; no usar en producción sin seguridad y validación.
+ - Copiar .env.example -> .env y setear BOT_DB_URL y BUSINESS_DB_URL (usar internal .railway.internal cuando despliegues dentro de Railway project)
+ - npm install
+ - npm run dev
+ - Abrir http://localhost:3000

@@ -1,31 +1,11 @@
-<!doctype html>
-<html><head><meta charset="utf-8"/><title>Reservas</title></head>
-<body>
-  <h2>Agenda / Reservas</h2>
-  <form id="f">
-    <input name="customer" placeholder="Cliente" required />
-    <input name="starts_at" type="datetime-local" required />
-    <input name="notes" placeholder="Notas" />
-    <button>Agendar</button>
-  </form>
-  <ul id="list"></ul>
+
+<!doctype html><html><head><meta charset="utf-8"/><title>Reservas</title></head><body>
+<h2>Agenda / Reservas</h2>
+<form id="f"><input name="customer" placeholder="Cliente" required /><input name="starts_at" type="datetime-local" required /><input name="notes" placeholder="Notas" /><button>Agendar</button></form>
+<ul id="list"></ul>
 <script>
-async function load(){
-  const res = await fetch('/api/appointments');
-  const data = await res.json();
-  const list = document.getElementById('list'); list.innerHTML='';
-  data.forEach(a=>{
-    const li = document.createElement('li');
-    li.textContent = a.customer + ' - ' + a.starts_at + ' ('+(a.notes||'')+')';
-    list.appendChild(li);
-  });
-}
-document.getElementById('f').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const f = e.target;
-  await fetch('/api/appointments',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ customer: f.customer.value, starts_at: f.starts_at.value, notes: f.notes.value })});
-  f.reset(); load();
-});
+async function load(){ const res = await fetch('/api/appointments'); const data = await res.json(); const list = document.getElementById('list'); list.innerHTML=''; data.forEach(a=>{ const li = document.createElement('li'); li.textContent = a.customer + ' - ' + a.starts_at + ' ('+(a.notes||'')+')'; list.appendChild(li); }); }
+document.getElementById('f').addEventListener('submit', async (e)=>{ e.preventDefault(); const f = e.target; await fetch('/api/appointments',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ customer: f.customer.value, starts_at: f.starts_at.value, notes: f.notes.value })}); f.reset(); load(); });
 load();
 </script>
 </body></html>

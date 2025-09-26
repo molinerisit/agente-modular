@@ -1,7 +1,7 @@
 {
-  "name": "agri-bot-full",
+  "name": "agri-bot-rules-full",
   "version": "1.0.0",
-  "description": "Sales & Reservations Bot - full demo with DB init and admin UI",
+  "description": "Bot with advanced business rules engine and CRUD UI (sales vs reservations)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

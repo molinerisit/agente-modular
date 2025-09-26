@@ -1,33 +1,20 @@
-<!doctype html>
-<html><head><meta charset="utf-8"/><title>Config - Panel</title></head>
-<body>
-  <h2>Panel - datos que ve el bot</h2>
-  <label>Bot ID: <input id="bot_id" value="default" /></label>
-  <button id="load">Cargar</button>
-  <h3>Config del bot</h3>
-  <pre id="botcfg"></pre>
-  <h3>Reglas de negocio</h3>
-  <pre id="brules"></pre>
-  <h3>Productos</h3>
-  <pre id="prods"></pre>
-  <h3>Reservas</h3>
-  <pre id="appts"></pre>
 
+<!doctype html><html><head><meta charset="utf-8"/><title>Config</title></head><body>
+<h2>Panel - datos que ve el bot</h2>
+<label>Bot ID: <input id="bot_id" value="default" /></label><button id="load">Cargar</button>
+<h3>Config del bot</h3><pre id="botcfg"></pre>
+<h3>Reglas</h3><pre id="brules"></pre>
+<h3>Productos</h3><pre id="prods"></pre>
+<h3>Reservas</h3><pre id="appts"></pre>
 <script>
 async function loadAll(){
   const bot_id = document.getElementById('bot_id').value;
-  const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id));
-  const j = await r.json();
-  if(j.ok){
-    document.getElementById('botcfg').textContent = JSON.stringify(j.config, null, 2);
-    document.getElementById('brules').textContent = JSON.stringify(j.business_rules, null, 2);
-  } else {
-    document.getElementById('botcfg').textContent = 'Error: ' + (j.error||'');
-  }
+  const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id)); const j = await r.json();
+  if(j.ok) document.getElementById('botcfg').textContent = JSON.stringify(j.config, null, 2);
+  const rr = await fetch('/api/rules'); document.getElementById('brules').textContent = JSON.stringify(await rr.json(), null, 2);
   const p = await fetch('/api/products'); document.getElementById('prods').textContent = JSON.stringify(await p.json(), null, 2);
   const a = await fetch('/api/appointments'); document.getElementById('appts').textContent = JSON.stringify(await a.json(), null, 2);
 }
-
 document.getElementById('load').addEventListener('click', loadAll);
 </script>
 </body></html>

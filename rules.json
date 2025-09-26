@@ -1,0 +1,130 @@
+{
+  "common": [
+    {
+      "mode": "common",
+      "condition": "pregunta_direccion",
+      "triggers": [
+        "dónde queda",
+        "dirección",
+        "ubicación",
+        "como llego"
+      ],
+      "action": "La dirección del local es {address}. Nuestro horario es {hours}. ¿Querés que te envíe el link de ubicación?",
+      "priority": 100
+    },
+    {
+      "mode": "common",
+      "condition": "pregunta_horarios",
+      "triggers": [
+        "horario",
+        "horarios",
+        "a qué hora abren",
+        "a qué hora cierran",
+        "cuando abren"
+      ],
+      "action": "Nuestro horario es: {hours}. ¿Necesitás un horario en particular?",
+      "priority": 100
+    },
+    {
+      "mode": "common",
+      "condition": "contacto_telefono",
+      "triggers": [
+        "teléfono",
+        "telefono",
+        "numero",
+        "llamar",
+        "contacto"
+      ],
+      "action": "Podés contactarnos al {phone}. ¿Querés que te lo comparta?",
+      "priority": 95
+    },
+    {
+      "mode": "common",
+      "condition": "formas_de_pago",
+      "triggers": [
+        "tarjeta",
+        "efectivo",
+        "transferencia",
+        "medio de pago",
+        "formas de pago",
+        "pago"
+      ],
+      "action": "Aceptamos {payment_methods}.",
+      "priority": 95
+    }
+  ],
+  "sales": [
+    {
+      "mode": "sales",
+      "condition": "disponibilidad_producto",
+      "triggers": [
+        "hay",
+        "tienen",
+        "disponible",
+        "stock",
+        "quedan"
+      ],
+      "action": "Sí, tenemos {product_name}. Precio: ${price}. Stock: {stock}. ¿Querés que lo reserve?",
+      "priority": 100
+    },
+    {
+      "mode": "sales",
+      "condition": "precio_producto",
+      "triggers": [
+        "precio",
+        "cuesta",
+        "cuánto sale",
+        "valor"
+      ],
+      "action": "{product_name} cuesta ${price}. ¿Querés que lo agregue al carrito?",
+      "priority": 100
+    },
+    {
+      "mode": "sales",
+      "condition": "descuento_efectivo",
+      "triggers": [
+        "efectivo",
+        "pago en efectivo",
+        "descuento efectivo"
+      ],
+      "action": "Si abonás en efectivo se aplica {cash_discount} sobre el total. ¿Querés que lo aplique ahora?",
+      "priority": 98
+    }
+  ],
+  "reservations": [
+    {
+      "mode": "reservations",
+      "condition": "crear_turno",
+      "triggers": [
+        "quiero un turno",
+        "reservar",
+        "agendar",
+        "tengo que sacar turno"
+      ],
+      "action": "¿Para qué servicio y día/hora te gustaría? Nuestros servicios: {service_list}.",
+      "priority": 100
+    },
+    {
+      "mode": "reservations",
+      "condition": "comprobar_disponibilidad",
+      "triggers": [
+        "hay turno",
+        "disponibilidad",
+        "está libre"
+      ],
+      "action": "Verifico disponibilidad para {date_time}... Si no hay, propongo alternativas.",
+      "priority": 100
+    },
+    {
+      "mode": "reservations",
+      "condition": "cancelar_turno",
+      "triggers": [
+        "cancelar turno",
+        "anular turno",
+        "dar de baja"
+      ],
+      "action": "Tu turno fue cancelado. Política de cancelación: {cancellation_policy}.",
+      "priority": 95
+    }
+  ]
+}

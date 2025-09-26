@@ -1,37 +1,20 @@
+
 <!doctype html>
-<html>
-<head><meta charset="utf-8"/><title>Chat Bot</title></head>
-<body>
-  <h2>Chat Bot</h2>
-  <label>Bot ID: <input id="bot_id" value="default" /></label>
-  <label>Mode: <span id="mode">loading...</span></label>
-  <a href="/config.html" target="_blank">Admin Config</a>
-  <div id="chat" style="border:1px solid #ddd; padding:10px; height:300px; overflow:auto;"></div>
-  <input id="msg" placeholder="Escribe..." style="width:70%"/>
-  <button id="send">Enviar</button>
-
+<html><head><meta charset="utf-8"/><title>Chat Bot</title></head><body>
+<h2>Chat Bot</h2>
+<label>Bot ID: <input id="bot_id" value="default" /></label>
+<label>Mode: <span id="mode">loading...</span></label>
+<a href="/config.html" target="_blank">Admin Config</a> | <a href="/rules.html" target="_blank">Reglas</a>
+<div id="chat" style="border:1px solid #ddd; padding:10px; height:300px; overflow:auto;"></div>
+<input id="msg" placeholder="Escribe..." style="width:70%"/>
+<button id="send">Enviar</button>
 <script>
-async function loadMode(){
-  const bot_id = document.getElementById('bot_id').value;
-  const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id));
-  const j = await r.json();
-  if(j.ok) document.getElementById('mode').textContent = j.config.mode;
-}
+async function loadMode(){ const bot_id = document.getElementById('bot_id').value; const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id)); const j = await r.json(); if(j.ok) document.getElementById('mode').textContent = j.config.mode; }
 loadMode();
-
-function append(t, cls){
-  const d = document.getElementById('chat');
-  const p = document.createElement('div');
-  p.textContent = t;
-  if(cls==='user') p.style.fontWeight='bold';
-  d.appendChild(p);
-  d.scrollTop = d.scrollHeight;
-}
-
+function append(t, cls){ const d = document.getElementById('chat'); const p = document.createElement('div'); p.textContent = t; if(cls==='user') p.style.fontWeight='bold'; d.appendChild(p); d.scrollTop = d.scrollHeight; }
 document.getElementById('send').addEventListener('click', async ()=>{
   const bot_id = document.getElementById('bot_id').value;
-  const text = document.getElementById('msg').value.trim();
-  if(!text) return;
+  const text = document.getElementById('msg').value.trim(); if(!text) return;
   append('Tú: '+text,'user'); document.getElementById('msg').value='';
   const res = await fetch('/api/chat',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bot_id, message: text })});
   const j = await res.json();
@@ -39,5 +22,4 @@ document.getElementById('send').addEventListener('click', async ()=>{
   else append('Error: '+(j.error||''));
 });
 </script>
-</body>
-</html>
+</body></html>
