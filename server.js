@@ -11,12 +11,12 @@ const { initDB } = require('./dbInit');
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+
+// servir todo desde public
 app.use(express.static(path.join(__dirname, 'public')));
 
 // inicializar DBs y tablas
-initDB().catch(err => {
-  console.error('DB init error:', err.message);
-});
+initDB().catch(err => console.error('DB init error:', err.message));
 
 // asegurar config inicial del bot
 async function ensureBotConfig(bot_id = 'default') {
@@ -52,77 +52,9 @@ app.get('/api/rules', async (req, res) => {
         []
       );
     }
-    res.json(rows);
+    res.json(Array.isArray(rows) ? rows : []);
   } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/rules', async (req, res) => {
-  try {
-    const { mode, condition, triggers, action, priority } = req.body;
-    await queryBusinessDB(
-      'INSERT INTO business_rules (mode, condition, triggers, action, priority) VALUES ($1,$2,$3,$4,$5)',
-      [mode, condition, JSON.stringify(triggers || []), action, priority || 50]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.put('/api/rules/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const { mode, condition, triggers, action, priority } = req.body;
-    await queryBusinessDB(
-      'UPDATE business_rules SET mode=$1, condition=$2, triggers=$3, action=$4, priority=$5 WHERE id=$6',
-      [
-        mode,
-        condition,
-        JSON.stringify(triggers || []),
-        action,
-        priority || 50,
-        id,
-      ]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.delete('/api/rules/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    await queryBusinessDB('DELETE FROM business_rules WHERE id=$1', [id]);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/rules/restore-defaults', async (req, res) => {
-  try {
-    await queryBusinessDB('DELETE FROM business_rules', []);
-    const js = JSON.parse(require('fs').readFileSync('./rules.json', 'utf8'));
-    const insert =
-      'INSERT INTO business_rules (mode, condition, triggers, action, priority) VALUES ($1,$2,$3,$4,$5)';
-    for (const group of ['common', 'sales', 'reservations']) {
-      if (!js[group]) continue;
-      for (const r of js[group]) {
-        await queryBusinessDB(insert, [
-          r.mode,
-          r.condition,
-          JSON.stringify(r.triggers),
-          r.action,
-          r.priority || 50,
-        ]);
-      }
-    }
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.json([]); // siempre devolver array para frontend
   }
 });
 
@@ -132,50 +64,9 @@ app.post('/api/rules/restore-defaults', async (req, res) => {
 app.get('/api/products', async (req, res) => {
   try {
     const rows = await queryBusinessDB('SELECT * FROM products ORDER BY id DESC', []);
-    res.json(rows);
+    res.json(Array.isArray(rows) ? rows : []);
   } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/products', async (req, res) => {
-  try {
-    const { name, price, stock } = req.body;
-    await queryBusinessDB(
-      'INSERT INTO products (name, price, stock) VALUES ($1,$2,$3)',
-      [name, price, stock]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-/* ======================
-   ENDPOINTS RESERVAS
-====================== */
-app.get('/api/appointments', async (req, res) => {
-  try {
-    const rows = await queryBusinessDB(
-      'SELECT * FROM appointments ORDER BY starts_at DESC',
-      []
-    );
-    res.json(rows);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/appointments', async (req, res) => {
-  try {
-    const { customer, starts_at, notes } = req.body;
-    await queryBusinessDB(
-      'INSERT INTO appointments (customer, starts_at, notes) VALUES ($1,$2,$3)',
-      [customer, starts_at, notes]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.json([]);
   }
 });
 
@@ -187,7 +78,6 @@ app.post('/api/chat', async (req, res) => {
     const { message, bot_id } = req.body;
     const cfg = await ensureBotConfig(bot_id);
 
-    // buscar reglas primero
     const rules = await queryBusinessDB(
       'SELECT * FROM business_rules WHERE mode=$1 OR mode=$2 ORDER BY priority DESC',
       [cfg.mode, 'common']
@@ -205,11 +95,8 @@ app.post('/api/chat', async (req, res) => {
       if (matched) break;
     }
 
-    if (matched) {
-      return res.json({ reply: matched.action });
-    }
+    if (matched) return res.json({ reply: matched.action });
 
-    // fallback a OpenAI
     if (!process.env.OPENAI_API_KEY) {
       return res.json({
         reply:
@@ -227,11 +114,7 @@ app.post('/api/chat', async (req, res) => {
         model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
       },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-      }
+      { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } }
     );
 
     const reply =
@@ -240,7 +123,7 @@ app.post('/api/chat', async (req, res) => {
 
     res.json({ reply });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.json({ reply: 'Error procesando la solicitud' });
   }
 });
 

@@ -1,78 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reglas de Negocio</title>
+</head>
+<body>
+  <h1>Reglas de negocio</h1>
+  <button onclick="load('sales')">Cargar Reglas de Ventas</button>
+  <button onclick="load('reservations')">Cargar Reglas de Reservas</button>
+  <div id="rules"></div>
 
-<!doctype html><html><head><meta charset="utf-8"/><title>Reglas</title></head><body>
-<h2>Reglas de negocio</h2>
-<label>Modo: <select id="mode"><option value="">--Todas--</option><option value="common">common</option><option value="sales">sales</option><option value="reservations">reservations</option></select></label>
-<button id="load">Cargar</button> <button id="restore">Restaurar reglas base</button>
-<h3>Agregar / Editar regla</h3>
-<form id="form">
-<input name="id" type="hidden" />
-<label>Modo: <select name="mode"><option value="common">common</option><option value="sales">sales</option><option value="reservations">reservations</option></select></label><br/>
-<label>Condición (clave): <input name="condition" required /></label><br/>
-<label>Triggers (una por línea):<br/><textarea name="triggers" rows="4" cols="60"></textarea></label><br/>
-<label>Acción (respuesta con placeholders):<br/><textarea name="action" rows="4" cols="60" required></textarea></label><br/>
-<label>Prioridad: <input name="priority" type="number" value="50" /></label><br/>
-<button type="submit">Guardar</button>
-</form>
-<h3>Listado</h3>
-<ul id="list"></ul>
-<script>
-async function load(){
-  const mode = document.getElementById('mode').value;
-  const url = '/api/rules' + (mode ? '?mode='+encodeURIComponent(mode) : '');
-  const res = await fetch(url); const data = await res.json();
-  const list = document.getElementById('list'); list.innerHTML='';
-  data.forEach(r=>{
-    const li = document.createElement('li');
-    const triggers = Array.isArray(r.triggers)?r.triggers:JSON.parse(r.triggers||'[]');
-    li.innerHTML = '<b>['+r.mode+'] '+r.condition+'</b> (pri:'+r.priority+')<br/>'+triggers.join(', ')+'<br/>'+r.action + '<br/>' + 
-      '<button data-id="'+r.id+'" class="edit">Editar</button> <button data-id="'+r.id+'" class="del">Eliminar</button>';
-    list.appendChild(li);
-  });
-}
-document.getElementById('load').addEventListener('click', load);
-document.getElementById('restore').addEventListener('click', async ()=>{
-  if(!confirm('Restaurar reglas base (se eliminarán las actuales)?')) return;
-  await fetch('/api/rules/restore-defaults',{method:'POST'});
-  load();
-});
+  <script>
+    async function load(mode) {
+      try {
+        const res = await fetch(`/api/rules?mode=${mode}`);
+        const data = await res.json();
 
-document.getElementById('form').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const f = e.target;
-  const obj = { mode: f.mode.value, condition: f.condition.value, triggers: f.triggers.value.split('\n').map(s=>s.trim()).filter(Boolean), action: f.action.value, priority: parseInt(f.priority.value)||50 };
-  const id = f.id.value;
-  if(id){
-    await fetch('/api/rules/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
-  } else {
-    await fetch('/api/rules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
-  }
-  f.reset(); load();
-});
+        const container = document.getElementById("rules");
+        container.innerHTML = "";
 
-document.getElementById('list').addEventListener('click', async (e)=>{
-  if(e.target.classList.contains('del')){
-    const id = e.target.getAttribute('data-id');
-    if(confirm('Eliminar regla?')){ await fetch('/api/rules/'+id,{method:'DELETE'}); load(); }
-  } else if(e.target.classList.contains('edit')){
-    const id = e.target.getAttribute('data-id');
-    const res = await fetch('/api/rules?mode=');
-    const rules = await res.json();
-    const r = rules.find(x=>x.id==id);
-    if(r){
-      const f = document.getElementById('form');
-      f.id.value = r.id;
-      f.mode.value = r.mode;
-      f.condition.value = r.condition;
-      const triggers = Array.isArray(r.triggers)?r.triggers:JSON.parse(r.triggers||'[]');
-      f.triggers.value = triggers.join('\n');
-      f.action.value = r.action;
-      f.priority.value = r.priority;
-      window.scrollTo(0,0);
+        if (!Array.isArray(data)) {
+          container.innerHTML = `<p style="color:red;">Error cargando reglas</p>`;
+          console.error("Backend devolvió:", data);
+          return;
+        }
+
+        if (data.length === 0) {
+          container.innerHTML = "<p>No hay reglas cargadas</p>";
+          return;
+        }
+
+        data.forEach(rule => {
+          const div = document.createElement("div");
+          div.textContent = `${rule.id} | ${rule.condition} => ${rule.action}`;
+          container.appendChild(div);
+        });
+      } catch (e) {
+        console.error(e);
+        document.getElementById("rules").innerHTML = "<p>Error cargando reglas</p>";
+      }
     }
-  }
-});
-
-// load initial
-load();
-</script>
-</body></html>
+  </script>
+</body>
+</html>
