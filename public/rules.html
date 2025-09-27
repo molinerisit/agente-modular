@@ -1,23 +1,63 @@
 
 <!doctype html><html><head><meta charset="utf-8"/><title>Reglas</title></head><body>
 <h2>Reglas de negocio</h2>
-<label>Modo: <select id="mode"><option value="">--Todas--</option><option value="common">common</option><option value="sales">sales</option><option value="reservations">reservations</option></select></label>
-<button id="load">Cargar</button> <button id="restore">Restaurar reglas base</button>
+
+<!-- Panel de modo del bot (config real) -->
+<div style="margin-bottom:12px; padding:8px; border:1px solid #ddd">
+  <label>Bot ID: <input id="bot_id" value="default"></label>
+  <label style="margin-left:8px">Modo del bot:
+    <select id="bot_mode">
+      <option value="sales">sales</option>
+      <option value="reservations">reservations</option>
+    </select>
+  </label>
+  <button id="saveMode">Guardar modo</button>
+  <span id="modeMsg" style="margin-left:6px;color:green"></span>
+</div>
+
+<!-- Filtro de listado de reglas -->
+<label>Modo (filtro): 
+  <select id="mode">
+    <option value="">--Todas--</option>
+    <option value="common">common</option>
+    <option value="sales">sales</option>
+    <option value="reservations">reservations</option>
+  </select>
+</label>
+<button id="load">Cargar</button> 
+<button id="restore">Restaurar reglas base</button>
+
 <h3>Agregar / Editar regla</h3>
 <form id="form">
-<input name="id" type="hidden" />
-<label>Modo: <select name="mode"><option value="common">common</option><option value="sales">sales</option><option value="reservations">reservations</option></select></label><br/>
-<label>Condición (clave): <input name="condition" required /></label><br/>
-<label>Triggers (una por línea):<br/><textarea name="triggers" rows="4" cols="60"></textarea></label><br/>
-<label>Acción (respuesta con placeholders):<br/><textarea name="action" rows="4" cols="60" required></textarea></label><br/>
-<label>Prioridad: <input name="priority" type="number" value="50" /></label><br/>
-<button type="submit">Guardar</button>
+  <input name="id" type="hidden" />
+  <label>Modo: 
+    <select name="mode">
+      <option value="common">common</option>
+      <option value="sales">sales</option>
+      <option value="reservations">reservations</option>
+    </select>
+  </label><br/>
+  <label>Condición (clave): <input name="condition" required /></label><br/>
+  <label>Triggers (una por línea):<br/>
+    <textarea name="triggers" rows="4" cols="60"></textarea>
+  </label><br/>
+  <label>Acción (respuesta con placeholders):<br/>
+    <textarea name="action" rows="4" cols="60" required></textarea>
+  </label><br/>
+  <label>Prioridad: <input name="priority" type="number" value="50" /></label><br/>
+  <button type="submit">Guardar</button>
 </form>
+
 <h3>Listado</h3>
 <ul id="list"></ul>
+
 <script>
+const FILTER_KEY = 'rules_filter_mode_v1';
+
 async function load(){
-  const mode = document.getElementById('mode').value;
+  const modeSel = document.getElementById('mode');
+  const mode = modeSel.value;
+  localStorage.setItem(FILTER_KEY, mode); // persistir filtro
   const url = '/api/rules' + (mode ? '?mode='+encodeURIComponent(mode) : '');
   const res = await fetch(url); const data = await res.json();
   const list = document.getElementById('list'); list.innerHTML='';
@@ -29,6 +69,7 @@ async function load(){
     list.appendChild(li);
   });
 }
+
 document.getElementById('load').addEventListener('click', load);
 document.getElementById('restore').addEventListener('click', async ()=>{
   if(!confirm('Restaurar reglas base (se eliminarán las actuales)?')) return;
@@ -39,7 +80,13 @@ document.getElementById('restore').addEventListener('click', async ()=>{
 document.getElementById('form').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const f = e.target;
-  const obj = { mode: f.mode.value, condition: f.condition.value, triggers: f.triggers.value.split('\n').map(s=>s.trim()).filter(Boolean), action: f.action.value, priority: parseInt(f.priority.value)||50 };
+  const obj = { 
+    mode: f.mode.value, 
+    condition: f.condition.value, 
+    triggers: f.triggers.value.split('\n').map(s=>s.trim()).filter(Boolean), 
+    action: f.action.value, 
+    priority: parseInt(f.priority.value)||50 
+  };
   const id = f.id.value;
   if(id){
     await fetch('/api/rules/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
@@ -55,15 +102,16 @@ document.getElementById('list').addEventListener('click', async (e)=>{
     if(confirm('Eliminar regla?')){ await fetch('/api/rules/'+id,{method:'DELETE'}); load(); }
   } else if(e.target.classList.contains('edit')){
     const id = e.target.getAttribute('data-id');
-    const res = await fetch('/api/rules?mode=');
+    // pedir todas para encontrar por id
+    const res = await fetch('/api/rules');
     const rules = await res.json();
-    const r = rules.find(x=>x.id==id);
+    const r = rules.find(x=>String(x.id)===String(id));
     if(r){
       const f = document.getElementById('form');
       f.id.value = r.id;
       f.mode.value = r.mode;
-      f.condition.value = r.condition;
       const triggers = Array.isArray(r.triggers)?r.triggers:JSON.parse(r.triggers||'[]');
+      f.condition.value = r.condition;
       f.triggers.value = triggers.join('\n');
       f.action.value = r.action;
       f.priority.value = r.priority;
@@ -72,7 +120,34 @@ document.getElementById('list').addEventListener('click', async (e)=>{
   }
 });
 
-// load initial
-load();
+/* ====== Config real del bot (guardar modo) ====== */
+async function loadBotMode(){
+  const bot_id = document.getElementById('bot_id').value || 'default';
+  const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id));
+  const j = await r.json();
+  if(j.ok && j.config){ document.getElementById('bot_mode').value = j.config.mode; }
+}
+document.getElementById('saveMode').addEventListener('click', async ()=>{
+  const bot_id = document.getElementById('bot_id').value || 'default';
+  const mode = document.getElementById('bot_mode').value;
+  const r = await fetch('/api/config', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ bot_id, mode })
+  });
+  const ok = (await r.json()).ok;
+  document.getElementById('modeMsg').textContent = ok ? 'Guardado' : 'Error';
+  setTimeout(()=> document.getElementById('modeMsg').textContent='', 1500);
+});
+
+/* ====== init ====== */
+(function init(){
+  // restaurar filtro persistido
+  const saved = localStorage.getItem(FILTER_KEY);
+  if(saved!==null){ document.getElementById('mode').value = saved; }
+  load();
+  loadBotMode();
+})();
 </script>
-</body></html>
+</body>
+</html>

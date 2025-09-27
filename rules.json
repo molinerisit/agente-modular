@@ -2,6 +2,44 @@
   "common": [
     {
       "mode": "common",
+      "condition": "saludo_basico",
+      "triggers": [
+        "hola",
+        "buenas",
+        "buen día",
+        "buen dia",
+        "buenas tardes",
+        "buenas noches",
+        "hey",
+        "qué tal",
+        "que tal",
+        "como va",
+        "cómo va",
+        "saludos"
+      ],
+      "action": "Hola, ¿en qué puedo ayudarte?",
+      "priority": 110
+    },
+    {
+      "mode": "common",
+      "condition": "despedida_basica",
+      "triggers": [
+        "chau",
+        "adiós",
+        "adios",
+        "nos vemos",
+        "hasta luego",
+        "gracias",
+        "hasta pronto",
+        "bye",
+        "me voy",
+        "nos hablamos"
+      ],
+      "action": "¡Gracias por tu visita! Que tengas un buen día.",
+      "priority": 105
+    },
+    {
+      "mode": "common",
       "condition": "pregunta_direccion",
       "triggers": [
         "dónde queda",
