@@ -22,14 +22,18 @@ async function load(){
 document.getElementById('f').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const f = e.target;
-  await fetch('/api/appointments',{
+  const payload = {
+    customer: f.customer.value,
+    starts_at: f.starts_at.value.replace('T',' ') + ':00',
+    notes: f.notes.value
+  };
+  const r = await fetch('/api/appointments',{
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      customer: f.customer.value,
-      starts_at: f.starts_at.value,
-      notes: f.notes.value
-    })
+    body: JSON.stringify(payload)
   });
+  if(!r.ok){
+    alert('No se pudo agendar: ' + (await r.text()));
+  }
   f.reset(); load();
 });
 load();

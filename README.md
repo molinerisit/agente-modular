@@ -1,8 +1,33 @@
-Agri Bot - Rules Full
----------------------
-Proyecto demo con motor de reglas (separado por modo sales / reservations), CRUD de reglas y precarga.
-Instrucciones:
- - Copiar .env.example -> .env y setear BOT_DB_URL y BUSINESS_DB_URL (usar internal .railway.internal cuando despliegues dentro de Railway project)
- - npm install
- - npm run dev
- - Abrir http://localhost:3000
+# Dual-mode Bot (Ventas / Reservas)
+
+Bot listo para Railway. No inventa datos. Usa DB para respuestas y LLM solo para detectar intención y redactar breve.
+
+## Requisitos
+- Node 18+
+- PostgreSQL (dos instancias o dos DB)
+- Variables en `.env`
+
+## Setup
+```bash
+cp .env.example .env
+npm i
+npm run init:db
+npm run dev
+```
+
+## Endpoints
+- `GET /api/config?bot_id=default`
+- `POST /api/config` body parcial para actualizar campos
+- `GET/POST/PUT/DELETE /api/rules`
+- `POST /api/rules/restore-defaults`
+- `GET/POST /api/products`
+- `GET /api/appointments`
+- `GET /api/appointments/available?starts_at=YYYY-MM-DDTHH:mm:ss`
+- `POST /api/appointments`
+- `POST /api/chat` { bot_id, message }
+
+## Campos de `bot_configs`
+`mode,name,address,hours,phone,payment_methods,cash_discount,service_list,cancellation_policy`
+
+## Front
+Abrí `/` y usá los paneles de Productos, Reservas y Reglas.

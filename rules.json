@@ -7,14 +7,11 @@
         "hola",
         "buenas",
         "buen día",
-        "buen dia",
         "buenas tardes",
         "buenas noches",
         "hey",
         "qué tal",
-        "que tal",
         "como va",
-        "cómo va",
         "saludos"
       ],
       "action": "Hola, ¿en qué puedo ayudarte?",
@@ -26,16 +23,13 @@
       "triggers": [
         "chau",
         "adiós",
-        "adios",
         "nos vemos",
         "hasta luego",
         "gracias",
         "hasta pronto",
-        "bye",
-        "me voy",
-        "nos hablamos"
+        "bye"
       ],
-      "action": "¡Gracias por tu visita! Que tengas un buen día.",
+      "action": "Gracias por tu visita.",
       "priority": 105
     },
     {
@@ -47,7 +41,7 @@
         "ubicación",
         "como llego"
       ],
-      "action": "La dirección del local es {address}. Nuestro horario es {hours}. ¿Querés que te envíe el link de ubicación?",
+      "action": "La dirección es {address}. Horarios: {hours}.",
       "priority": 100
     },
     {
@@ -60,7 +54,7 @@
         "a qué hora cierran",
         "cuando abren"
       ],
-      "action": "Nuestro horario es: {hours}. ¿Necesitás un horario en particular?",
+      "action": "Nuestro horario es: {hours}.",
       "priority": 100
     },
     {
@@ -73,7 +67,7 @@
         "llamar",
         "contacto"
       ],
-      "action": "Podés contactarnos al {phone}. ¿Querés que te lo comparta?",
+      "action": "Podés contactarnos al {phone}.",
       "priority": 95
     },
     {
@@ -89,6 +83,43 @@
       ],
       "action": "Aceptamos {payment_methods}.",
       "priority": 95
+    },
+    {
+      "mode": "common",
+      "condition": "envios",
+      "triggers": [
+        "envío",
+        "envios",
+        "delivery",
+        "reparto",
+        "envían"
+      ],
+      "action": "Hacemos envíos en la zona. Consultá costo y tiempos según tu ubicación.",
+      "priority": 90
+    },
+    {
+      "mode": "common",
+      "condition": "devoluciones",
+      "triggers": [
+        "devolución",
+        "cambio",
+        "garantía"
+      ],
+      "action": "Política: {cancellation_policy}.",
+      "priority": 85
+    },
+    {
+      "mode": "common",
+      "condition": "redes",
+      "triggers": [
+        "instagram",
+        "facebook",
+        "redes",
+        "pagina",
+        "página"
+      ],
+      "action": "Podés seguirnos en nuestras redes. Si querés te comparto los links.",
+      "priority": 80
     }
   ],
   "sales": [
@@ -114,7 +145,7 @@
         "cuánto sale",
         "valor"
       ],
-      "action": "{product_name} cuesta ${price}. ¿Querés que lo agregue al carrito?",
+      "action": "{product_name} cuesta ${price}.",
       "priority": 100
     },
     {
@@ -125,7 +156,7 @@
         "pago en efectivo",
         "descuento efectivo"
       ],
-      "action": "Si abonás en efectivo se aplica {cash_discount} sobre el total. ¿Querés que lo aplique ahora?",
+      "action": "En efectivo: {cash_discount}.",
       "priority": 98
     }
   ],
@@ -137,9 +168,9 @@
         "quiero un turno",
         "reservar",
         "agendar",
-        "tengo que sacar turno"
+        "sacar turno"
       ],
-      "action": "¿Para qué servicio y día/hora te gustaría? Nuestros servicios: {service_list}.",
+      "action": "¿Para qué servicio y día/hora te gustaría? Servicios: {service_list}.",
       "priority": 100
     },
     {
@@ -150,7 +181,7 @@
         "disponibilidad",
         "está libre"
       ],
-      "action": "Verifico disponibilidad para {date_time}... Si no hay, propongo alternativas.",
+      "action": "Verifico disponibilidad para {date_time}.",
       "priority": 100
     },
     {
@@ -161,8 +192,38 @@
         "anular turno",
         "dar de baja"
       ],
-      "action": "Tu turno fue cancelado. Política de cancelación: {cancellation_policy}.",
+      "action": "Turno cancelado. Política: {cancellation_policy}.",
       "priority": 95
+    },
+    {
+      "mode": "reservations",
+      "condition": "reprogramar",
+      "triggers": [
+        "cambiar turno",
+        "reprogramar"
+      ],
+      "action": "Puedo reprogramarlo. Indicá nuevo día y hora.",
+      "priority": 95
+    },
+    {
+      "mode": "reservations",
+      "condition": "tarde",
+      "triggers": [
+        "llego tarde",
+        "me atraso"
+      ],
+      "action": "Podemos esperar hasta 10 minutos según disponibilidad. Si preferís, reprogramamos.",
+      "priority": 80
+    },
+    {
+      "mode": "reservations",
+      "condition": "confirmacion",
+      "triggers": [
+        "confirmar turno",
+        "confirmación"
+      ],
+      "action": "Confirmado. Te espero en {address}.",
+      "priority": 80
     }
   ]
 }

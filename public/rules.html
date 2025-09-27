@@ -1,8 +1,6 @@
-
 <!doctype html><html><head><meta charset="utf-8"/><title>Reglas</title></head><body>
 <h2>Reglas de negocio</h2>
 
-<!-- Panel de modo del bot (config real) -->
 <div style="margin-bottom:12px; padding:8px; border:1px solid #ddd">
   <label>Bot ID: <input id="bot_id" value="default"></label>
   <label style="margin-left:8px">Modo del bot:
@@ -15,7 +13,6 @@
   <span id="modeMsg" style="margin-left:6px;color:green"></span>
 </div>
 
-<!-- Filtro de listado de reglas -->
 <label>Modo (filtro): 
   <select id="mode">
     <option value="">--Todas--</option>
@@ -57,26 +54,24 @@ const FILTER_KEY = 'rules_filter_mode_v1';
 async function load(){
   const modeSel = document.getElementById('mode');
   const mode = modeSel.value;
-  localStorage.setItem(FILTER_KEY, mode); // persistir filtro
+  localStorage.setItem(FILTER_KEY, mode);
   const url = '/api/rules' + (mode ? '?mode='+encodeURIComponent(mode) : '');
   const res = await fetch(url); const data = await res.json();
   const list = document.getElementById('list'); list.innerHTML='';
   data.forEach(r=>{
-    const li = document.createElement('li');
     const triggers = Array.isArray(r.triggers)?r.triggers:JSON.parse(r.triggers||'[]');
+    const li = document.createElement('li');
     li.innerHTML = '<b>['+r.mode+'] '+r.condition+'</b> (pri:'+r.priority+')<br/>'+triggers.join(', ')+'<br/>'+r.action + '<br/>' + 
       '<button data-id="'+r.id+'" class="edit">Editar</button> <button data-id="'+r.id+'" class="del">Eliminar</button>';
     list.appendChild(li);
   });
 }
-
 document.getElementById('load').addEventListener('click', load);
 document.getElementById('restore').addEventListener('click', async ()=>{
   if(!confirm('Restaurar reglas base (se eliminarán las actuales)?')) return;
   await fetch('/api/rules/restore-defaults',{method:'POST'});
   load();
 });
-
 document.getElementById('form').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const f = e.target;
@@ -95,16 +90,13 @@ document.getElementById('form').addEventListener('submit', async (e)=>{
   }
   f.reset(); load();
 });
-
 document.getElementById('list').addEventListener('click', async (e)=>{
   if(e.target.classList.contains('del')){
     const id = e.target.getAttribute('data-id');
     if(confirm('Eliminar regla?')){ await fetch('/api/rules/'+id,{method:'DELETE'}); load(); }
   } else if(e.target.classList.contains('edit')){
     const id = e.target.getAttribute('data-id');
-    // pedir todas para encontrar por id
-    const res = await fetch('/api/rules');
-    const rules = await res.json();
+    const res = await fetch('/api/rules'); const rules = await res.json();
     const r = rules.find(x=>String(x.id)===String(id));
     if(r){
       const f = document.getElementById('form');
@@ -120,7 +112,6 @@ document.getElementById('list').addEventListener('click', async (e)=>{
   }
 });
 
-/* ====== Config real del bot (guardar modo) ====== */
 async function loadBotMode(){
   const bot_id = document.getElementById('bot_id').value || 'default';
   const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id));
@@ -140,9 +131,7 @@ document.getElementById('saveMode').addEventListener('click', async ()=>{
   setTimeout(()=> document.getElementById('modeMsg').textContent='', 1500);
 });
 
-/* ====== init ====== */
 (function init(){
-  // restaurar filtro persistido
   const saved = localStorage.getItem(FILTER_KEY);
   if(saved!==null){ document.getElementById('mode').value = saved; }
   load();

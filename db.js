@@ -1,21 +1,18 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-const botDbUrl = process.env.BOT_DB_URL;
-const businessDbUrl = process.env.BUSINESS_DB_URL;
+const botPool = new Pool({ connectionString: process.env.BOT_DB_URL, ssl: process.env.BOT_DB_URL?.includes('railway.app') ? { rejectUnauthorized: false } : undefined });
+const businessPool = new Pool({ connectionString: process.env.BUSINESS_DB_URL, ssl: process.env.BUSINESS_DB_URL?.includes('railway.app') ? { rejectUnauthorized: false } : undefined });
 
-const botPool = botDbUrl ? new Pool({ connectionString: botDbUrl }) : null;
-const businessPool = businessDbUrl ? new Pool({ connectionString: businessDbUrl }) : null;
-
-async function queryBotDB(text, params) {
-  if(!botPool) throw new Error('BOT_DB_URL not configured in .env');
-  const res = await botPool.query(text, params);
-  return res.rows;
+async function queryBotDB(text, params){
+  const c = await botPool.connect();
+  try{ const r = await c.query(text, params); return r.rows; }
+  finally{ c.release(); }
 }
-async function queryBusinessDB(text, params) {
-  if(!businessPool) throw new Error('BUSINESS_DB_URL not configured in .env');
-  const res = await businessPool.query(text, params);
-  return res.rows;
+async function queryBusinessDB(text, params){
+  const c = await businessPool.connect();
+  try{ const r = await c.query(text, params); return r.rows; }
+  finally{ c.release(); }
 }
 
-module.exports = { queryBotDB, queryBusinessDB, botPool, businessPool };
+module.exports = { queryBotDB, queryBusinessDB };
