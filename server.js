@@ -13,12 +13,23 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// inicializar DBs y tablas
+/* ========= helpers ========= */
+const norm = s => (s || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'');
+
+const parseTriggers = v => {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  try { return JSON.parse(v); } catch { return []; }
+};
+
+/* ========= init ========= */
 initDB().catch(err => {
   console.error('DB init error:', err.message);
 });
 
-// asegurar config inicial del bot
 async function ensureBotConfig(bot_id = 'default') {
   const rows = await queryBotDB(
     'SELECT bot_id, mode, rules FROM bot_configs WHERE bot_id=$1',
@@ -34,25 +45,21 @@ async function ensureBotConfig(bot_id = 'default') {
   return rows[0];
 }
 
+/* ========= health ========= */
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
 /* ======================
-   ENDPOINTS REGLAS
+   REGLAS
 ====================== */
 app.get('/api/rules', async (req, res) => {
   try {
     const mode = req.query.mode;
-    let rows;
-    if (mode) {
-      rows = await queryBusinessDB(
-        'SELECT * FROM business_rules WHERE mode=$1 ORDER BY priority DESC, id DESC',
-        [mode]
-      );
-    } else {
-      rows = await queryBusinessDB(
-        'SELECT * FROM business_rules ORDER BY priority DESC, id DESC',
-        []
-      );
-    }
-    res.json(rows);
+    const sql = mode
+      ? 'SELECT * FROM business_rules WHERE mode=$1 ORDER BY priority DESC, id DESC'
+      : 'SELECT * FROM business_rules ORDER BY priority DESC, id DESC';
+    const params = mode ? [mode] : [];
+    const rows = await queryBusinessDB(sql, params);
+    res.json(rows); // tus frontends esperan array crudo
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -77,14 +84,7 @@ app.put('/api/rules/:id', async (req, res) => {
     const { mode, condition, triggers, action, priority } = req.body;
     await queryBusinessDB(
       'UPDATE business_rules SET mode=$1, condition=$2, triggers=$3, action=$4, priority=$5 WHERE id=$6',
-      [
-        mode,
-        condition,
-        JSON.stringify(triggers || []),
-        action,
-        priority || 50,
-        id,
-      ]
+      [mode, condition, JSON.stringify(triggers || []), action, priority || 50, id]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -102,7 +102,7 @@ app.delete('/api/rules/:id', async (req, res) => {
   }
 });
 
-app.post('/api/rules/restore-defaults', async (req, res) => {
+app.post('/api/rules/restore-defaults', async (_req, res) => {
   try {
     await queryBusinessDB('DELETE FROM business_rules', []);
     const js = JSON.parse(require('fs').readFileSync('./rules.json', 'utf8'));
@@ -114,7 +114,7 @@ app.post('/api/rules/restore-defaults', async (req, res) => {
         await queryBusinessDB(insert, [
           r.mode,
           r.condition,
-          JSON.stringify(r.triggers),
+          JSON.stringify(r.triggers || []),
           r.action,
           r.priority || 50,
         ]);
@@ -127,12 +127,15 @@ app.post('/api/rules/restore-defaults', async (req, res) => {
 });
 
 /* ======================
-   ENDPOINTS PRODUCTOS
+   PRODUCTOS
 ====================== */
-app.get('/api/products', async (req, res) => {
+app.get('/api/products', async (_req, res) => {
   try {
-    const rows = await queryBusinessDB('SELECT * FROM products ORDER BY id DESC', []);
-    res.json(rows);
+    const rows = await queryBusinessDB(
+      'SELECT * FROM products ORDER BY id DESC',
+      []
+    );
+    res.json(rows); // tu products.html espera array crudo
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -152,15 +155,15 @@ app.post('/api/products', async (req, res) => {
 });
 
 /* ======================
-   ENDPOINTS RESERVAS
+   RESERVAS
 ====================== */
-app.get('/api/appointments', async (req, res) => {
+app.get('/api/appointments', async (_req, res) => {
   try {
     const rows = await queryBusinessDB(
       'SELECT * FROM appointments ORDER BY starts_at DESC',
       []
     );
-    res.json(rows);
+    res.json(rows); // tu reservations.html espera array crudo
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -180,72 +183,89 @@ app.post('/api/appointments', async (req, res) => {
 });
 
 /* ======================
-   CHAT DEL BOT
+   CONFIG
+====================== */
+app.get('/api/config', async (req, res) => {
+  try {
+    const bot_id = req.query.bot_id || 'default';
+    const cfg = await ensureBotConfig(bot_id);
+    res.json({ ok: true, config: cfg });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/config', async (req, res) => {
+  try {
+    const { bot_id = 'default', mode, rules } = req.body || {};
+    const current = await ensureBotConfig(bot_id);
+    const newMode = mode || current.mode;
+    const newRules = rules ?? current.rules;
+    await queryBotDB(
+      'UPDATE bot_configs SET mode=$2, rules=$3 WHERE bot_id=$1',
+      [bot_id, newMode, newRules]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+/* ======================
+   CHAT
 ====================== */
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, bot_id } = req.body;
+    const { message = '', bot_id } = req.body || {};
     const cfg = await ensureBotConfig(bot_id);
 
-    // buscar reglas primero
     const rules = await queryBusinessDB(
       'SELECT * FROM business_rules WHERE mode=$1 OR mode=$2 ORDER BY priority DESC',
       [cfg.mode, 'common']
     );
 
+    const msg = norm(message);
     let matched = null;
     for (const r of rules) {
-      const triggers = r.triggers || [];
+      const triggers = parseTriggers(r.triggers);
       for (const t of triggers) {
-        if (message.toLowerCase().includes(t.toLowerCase())) {
-          matched = r;
-          break;
-        }
+        if (msg.includes(norm(String(t)))) { matched = r; break; }
       }
       if (matched) break;
     }
 
     if (matched) {
-      return res.json({ reply: matched.action });
+      return res.json({ ok: true, reply: matched.action });
     }
 
-    // fallback a OpenAI
     if (!process.env.OPENAI_API_KEY) {
       return res.json({
-        reply:
-          'Lo siento, no entiendo tu consulta y no hay API configurada para responder.',
+        ok: true,
+        reply: 'No encontré una regla para eso. Podés reformular o crear una regla nueva.'
       });
     }
 
-    const prompt = `Eres un asistente que responde en base a las reglas de negocio: ${JSON.stringify(
-      rules
-    )}. Usuario: ${message}`;
+    const prompt =
+      `Actúa como bot del negocio. Prioriza estas reglas (JSON): ${JSON.stringify(rules)}.\n` +
+      `Usuario: "${message}". Responde breve en español.`;
 
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-      }
+      { model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] },
+      { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } }
     );
 
-    const reply =
-      response.data.choices[0].message?.content ||
-      'No entendí, podrías reformularlo?';
+    const reply = response.data?.choices?.[0]?.message?.content
+      || 'No entendí, ¿podés reformular?';
 
-    res.json({ reply });
+    res.json({ ok: true, reply });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
 /* ======================
-   SERVER START
+   START
 ====================== */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
