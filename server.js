@@ -26,6 +26,30 @@ function parseTriggers(v){
   if(Array.isArray(v)) return v;
   try{ return JSON.parse(v); }catch{ return []; }
 }
+function tokenize(str){
+  return norm(str).split(/[^a-z0-9]+/).filter(t=>t.length>2);
+}
+function jaccard(a, b){
+  const A = new Set(a); const B = new Set(b);
+  const inter = new Set([...A].filter(x=>B.has(x))).size;
+  const uni = new Set([...A, ...B]).size || 1;
+  return inter / uni;
+}
+function semanticRuleFallback(message, rules){
+  const msgTok = tokenize(message);
+  let best = null;
+  for(const r of rules){
+    const triggers = parseTriggers(r.triggers);
+    for(const t of triggers){
+      const sc = jaccard(msgTok, tokenize(String(t)));
+      if(sc >= 0.34){ // umbral conservador
+        if(!best || sc > best.score) best = { rule:r, score: sc };
+      }
+    }
+  }
+  return best ? best.rule : null;
+}
+
 
 async function ensureBotConfig(bot_id='default'){
   const rows = await queryBotDB('SELECT * FROM bot_configs WHERE bot_id=$1', [bot_id]);
@@ -205,6 +229,8 @@ app.post('/api/chat', async (req,res)=>{
       if (matched) break;
     }
 
+    if(!matched){ matched = semanticRuleFallback(message, rules); }
+
     const profile = await getBusinessProfile(bot_id);
     const ctxBase = {
       name: profile.name,
@@ -228,7 +254,13 @@ app.post('/api/chat', async (req,res)=>{
     }
 
     if(!process.env.OPENAI_API_KEY){
-      return res.json({ ok:true, reply: 'No encontré una regla para eso. Podés reformular o crear una regla nueva.' });
+      let reply;
+      if(cfg.mode==='sales'){
+        try{ const names = await getProductCatalog(20); reply = names.length ? ('Vendemos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'No tengo productos cargados.'; } catch{ reply = 'Decime qué producto buscás y te confirmo.'; }
+      } else {
+        reply = (profile.service_list ? ('Servicios: ' + profile.service_list + '. ') : '') + 'Decime día y hora y verifico disponibilidad.';
+      }
+      return res.json({ ok:true, reply });
     }
 
     // NLU acotado -> decisión -> respuesta grounded
@@ -236,6 +268,14 @@ app.post('/api/chat', async (req,res)=>{
     let reply = 'No encontré una regla para eso. ¿Podés reformular?';
 
     if(cfg.mode === 'sales'){
+      if(intent === 'ask_catalog'){
+        const names = await getProductCatalog(20);
+        if(names.length){
+          reply = 'Vendemos: ' + names.join(', ') + '. Decime cuál te interesa.';
+        } else {
+          reply = 'Aún no hay productos cargados.';
+        }
+      } else 
       if(intent === 'ask_price' || intent === 'ask_stock'){
         const explicit = slots.product_name;
         let p = null;
@@ -247,7 +287,8 @@ app.post('/api/chat', async (req,res)=>{
         if(p){
           reply = `Tenemos ${p.name}. Precio $${p.price}. Stock ${p.stock}.`;
         }else{
-          reply = 'Decime el nombre del producto para confirmarte precio y stock.';
+          const names = await getProductCatalog(20);
+          reply = names.length ? ('No pasa nada. Algunos productos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'No tengo productos cargados.';
         }
       } else if(intent === 'ask_hours'){
         reply = profile.hours ? `Nuestro horario es: ${profile.hours}.` : 'No tengo horario configurado.';
@@ -257,6 +298,9 @@ app.post('/api/chat', async (req,res)=>{
         reply = profile.payment_methods ? `Medios de pago: ${profile.payment_methods}.` : 'No tengo medios de pago configurados.';
       }
     } else if(cfg.mode === 'reservations'){
+      if(intent === 'ask_services'){
+        reply = profile.service_list ? ('Servicios: ' + profile.service_list + '.') : 'No tengo servicios configurados.';
+      } else 
       if(intent === 'check_availability' || intent === 'create_booking'){
         const dt = slots.date_time;
         if(!dt){
@@ -280,7 +324,16 @@ app.post('/api/chat', async (req,res)=>{
         reply = profile.address ? `Estamos en ${profile.address}.` : 'No tengo dirección configurada.';
       }
     }
-    if(intent === 'greet') reply = 'Hola, ¿en qué puedo ayudarte?';
+    /* UNCERTAINTY FALLBACK */
+        if(/no estoy seguro|no se como se llama|no sé como se llama|no estoy segur/.test(norm(message))){
+          const names = await getProductCatalog(20);
+          if(names.length){
+            reply = 'Algunos productos: ' + names.join(', ') + '. Decime cuál te interesa.';
+          } else {
+            reply = 'Aún no hay productos cargados.';
+          }
+        }
+        if(intent === 'greet') reply = 'Hola, ¿en qué puedo ayudarte?';
     if(intent === 'bye') reply = 'Gracias por tu visita.';
 
     res.json({ ok:true, reply });
