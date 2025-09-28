@@ -223,14 +223,14 @@
       "mode": "reservations",
       "condition": "comprobar_disponibilidad",
       "triggers": [
-        "está libre",
-        "hay lugar",
-        "tenes lugar",
-        "esta libre",
         "hay turno",
         "disponibilidad",
-        "tenés lugar",
-        "hay lugar?"
+        "está libre",
+        "esta libre",
+        "hay lugar",
+        "hay lugar?",
+        "tenes lugar",
+        "tenés lugar"
       ],
       "action": "Verifico disponibilidad para {date_time}.",
       "priority": 100
