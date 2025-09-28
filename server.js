@@ -73,6 +73,54 @@ function semanticRuleFallback(message, rules){
     }
   }
   return best ? best.rule : null;
+
+}
+function isPureGreeting(message){
+  const t = tokenize(message);
+  const G = new Set(['hola','hey','buenas','buen','dia','día','tardes','noches','quetal','qué','tal','como','cómo','va','saludos']);
+  const other = t.filter(x=> !G.has(x));
+  return other.length === 0 && t.length <= 5;
+}
+async function ensureISODate(text){
+  // 1) Fast path numeric
+  const direct = toISOorNull(text);
+  if(direct) return direct;
+  // 2) Heurística español: "lunes proximo a las 8:00"
+  try{
+    const str = norm(text);
+    const dowMap = {'lunes':1,'martes':2,'miercoles':3,'miércoles':3,'jueves':4,'viernes':5,'sabado':6,'sábado':6,'domingo':7};
+    let m = str.match(/(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)(?:\s+(proximo|pr\u00f3ximo))?.*?(\d{1,2})(?::(\d{2}))?/);
+    if(m){
+      const day = m[1]; const next = !!m[2];
+      const hh = parseInt(m[3],10); const mm = m[4]?parseInt(m[4],10):0;
+      const now = DateTime.now({ zone:'America/Argentina/Cordoba' });
+      const targetDow = dowMap[day];
+      let d = now;
+      // move to next occurrence
+      let add = (targetDow + 7 - now.weekday) % 7;
+      if(add===0) add = 7;
+      if(next) add = add or 7;
+      d = now.plus({ days: add }).set({ hour: hh, minute: mm, second: 0, millisecond: 0 });
+      if(d <= now) d = d.plus({ days: 7 });
+      return d.toISO({ suppressMilliseconds:true });
+    }
+  }catch(_e){ /* ignore */ }
+  // 3) LLM parse if available
+  if(process.env.OPENAI_API_KEY){
+    try{
+      const sys = 'Convierte a ISO YYYY-MM-DDTHH:mm:ss en zona America/Argentina/Cordoba. Si no entiendes, responde null.';
+      const user = 'Frase: "'+text+'". Responde SOLO el ISO o null.';
+      const r = await axios.post('https://api.openai.com/v1/chat/completions',{
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        messages: [{role:'system',content:sys},{role:'user',content:user}]
+      },{ timeout: 8000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
+      const out = (r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content || '').trim();
+      const iso = toISOorNull(out);
+      if(iso) return iso;
+    }catch(_e){ /* ignore */ }
+  }
+  return null;
 }
 async function getProductCatalog(bot_id, limit=20){
   const rows = await queryBusinessDB('SELECT name FROM products WHERE bot_id=$1 ORDER BY id DESC LIMIT $2', [bot_id, limit]);
@@ -325,6 +373,8 @@ app.post('/api/chat', async (req,res)=>{
     const msg = norm(message);
     let matched = null;
     for (const r of rules) {
+      /* GREETING GUARD */
+      if(r.condition==='saludo_basico' && !isPureGreeting(message)) { continue; }
       const triggers = parseTriggers(r.triggers);
       for (const t of triggers) {
         if (includesTrigger(msg, t)) { matched = r; break; }
@@ -410,7 +460,7 @@ app.post('/api/chat', async (req,res)=>{
       if(intent === 'ask_services'){
         reply = profile.service_list ? ('Servicios: ' + profile.service_list + '.') : 'No tengo servicios configurados.';
       } else if(intent === 'check_availability' || intent === 'create_booking'){
-        const dt = slots.date_time || toISOorNull(slots.date_time);
+        const dt = await ensureISODate(slots.date_time || message);
         if(!dt){
           reply = `Decime día y hora. Horarios: ${profile.hours||'no configurado'}.`;
         }else{
