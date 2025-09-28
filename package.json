@@ -1,7 +1,7 @@
 {
   "name": "assistant-bot-prod",
-  "version": "2.6.0",
-  "description": "Bot multi-tenant ventas/reservas con NLU, fallbacks y CSP-safe",
+  "version": "2.8.0",
+  "description": "Bot multi-tenant ventas/reservas con NLU, confirmación, CSP y UI mejorada",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

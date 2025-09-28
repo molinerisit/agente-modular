@@ -1,15 +1,1 @@
-<!doctype html><html><head><meta charset="utf-8"/><title>Reservas</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head>
-<body>
-  <div class="container">
-    <h2>Agenda / Reservas</h2>
-    <form id="f">
-      <label>Bot ID: <input name="bot_id" value="default" /></label><br/>
-      <input name="customer" placeholder="Cliente" required />
-      <input name="starts_at" type="datetime-local" required />
-      <input name="notes" placeholder="Notas" />
-      <button>Agendar</button>
-    </form>
-    <ul id="list"></ul>
-  </div>
-  <script src="/js/reservations.js" defer></script>
-</body></html>
+<!doctype html><html><head><meta charset="utf-8"/><title>Reservas</title><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div class="container narrow"><div class="card"><h2>Agenda / Reservas</h2><form id="f" class="row" style="flex-direction:column; align-items:flex-start"><label>Bot ID: <input name="bot_id" value="default" /></label><div class="row"><input name="customer" placeholder="Cliente" required /><input name="starts_at" type="datetime-local" required /><input name="notes" placeholder="Notas" /><button>Agendar</button></div></form><ul id="list"></ul></div></div><script src="/js/reservations.js" defer></script></body></html>

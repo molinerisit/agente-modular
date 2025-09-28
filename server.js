@@ -24,7 +24,8 @@ function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[
 function fillTemplate(tpl, ctx){ return String(tpl).replace(/\{([a-z_]+)\}/gi, (_, k) => { const v = ctx[k]; return v === undefined || v === null ? `{${k}}` : String(v); }); }
 function resolveMissingPlaceholders(text, profile){
   return String(text)
-    .replace(/\{service_list\}/g, profile.service_list ? profile.service_list : 'los servicios disponibles')
+    .replace(/\{services_hint\}/g, profile.service_list ? 'Servicios: '+profile.service_list+'.' : '')
+    .replace(/\{service_list\}/g, profile.service_list ? profile.service_list : 'servicios disponibles')
     .replace(/\{hours\}/g, profile.hours ? profile.hours : 'no están configurados')
     .replace(/\{address\}/g, profile.address ? profile.address : 'nuestra dirección')
     .replace(/\{phone\}/g, profile.phone ? profile.phone : 'nuestro teléfono')
@@ -83,7 +84,7 @@ Slots permitidos: product_name, date_time, customer, service. No inventes datos.
   try{ return JSON.parse(r.data.choices[0].message.content); }catch{ return {intent:'unknown', slots:{}};}
 }
 function fmtHuman(dtISO){
-  const dt = DateTime.fromISO(dtISO, { zone:'America/Argentina/Cordoba' });
+  const dt = DateTime.fromISO(dtISO, { setZone:true }).setZone('America/Argentina/Cordoba');
   return dt.isValid ? dt.setLocale('es-AR').toFormat("cccc d 'de' LLLL 'a las' HH:mm") : dtISO;
 }
 async function naturalReply(context, userMessage, fallback){
@@ -114,11 +115,11 @@ app.get('/api/products', async (req,res)=>{ try{ const bot_id = req.query.bot_id
 app.post('/api/products', async (req,res)=>{ try{ const parsed = productCreateSchema.safeParse(req.body||{}); if(!parsed.success) return res.status(400).json({ ok:false, error:'Bad product payload' }); const { bot_id, name, price, stock } = parsed.data; await queryBusinessDB('INSERT INTO products(bot_id,name,price,stock) VALUES($1,$2,$3,$4)', [bot_id, name, price, stock]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 /* Appointments */
 app.get('/api/appointments', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const rows = await queryBusinessDB('SELECT * FROM appointments WHERE bot_id=$1 ORDER BY starts_at DESC', [bot_id]); res.json(rows); }catch(e){ res.status(500).json({ error:e.message }); } });
-app.get('/api/appointments/available', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const starts_at = await ensureISODate(req.query.starts_at); if(!starts_at) return res.status(400).json({ ok:false, error:'Fecha inválida' }); const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]); const slot = Number(cfg?.slot_minutes || 30); const rows = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, starts_at, slot]); res.json({ ok:true, available: rows.length===0 }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
-app.post('/api/appointments', async (req,res)=>{ try{ const parsed = apptCreateSchema.safeParse(req.body||{}); if(!parsed.success) return res.status(400).json({ ok:false, error:'Bad appointment payload' }); const { bot_id, customer, starts_at, notes } = parsed.data; const iso = await ensureISODate(starts_at); if(!iso) return res.status(400).json({ ok:false, error:'Fecha inválida' }); const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]); const slot = Number(cfg?.slot_minutes || 30); const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, iso, slot]); if(clash.length) return res.status(409).json({ ok:false, error:'Horario no disponible' }); await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, customer, iso.replace('T',' ').slice(0,19), notes||null]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
+app.get('/api/appointments/available', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const starts_at = await ensureISODate(req.query.starts_at); if(!starts_at) return res.status(400).json({ ok:false, error:'Fecha inválida' }); const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]); const slot = Number(cfg?.slot_minutes || 30); const rows = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamptz - ($3 * interval '1 minute')) AND ($2::timestamptz + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, starts_at, slot]); res.json({ ok:true, available: rows.length===0 }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
+app.post('/api/appointments', async (req,res)=>{ try{ const parsed = apptCreateSchema.safeParse(req.body||{}); if(!parsed.success) return res.status(400).json({ ok:false, error:'Bad appointment payload' }); const { bot_id, customer, starts_at, notes } = parsed.data; const iso = await ensureISODate(starts_at); if(!iso) return res.status(400).json({ ok:false, error:'Fecha inválida' }); const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]); const slot = Number(cfg?.slot_minutes || 30); const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamptz - ($3 * interval '1 minute')) AND ($2::timestamptz + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, iso, slot]); if(clash.length) return res.status(409).json({ ok:false, error:'Horario no disponible' }); await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, customer, iso, notes||null]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 /* Pending intents helpers */
 async function getPending(bot_id, session_id){ const r = await queryBusinessDB('SELECT * FROM pending_intents WHERE bot_id=$1 AND session_id=$2', [bot_id, session_id]); return r[0]; }
-async function setPending(bot_id, session_id, kind, date_time, service){ await queryBusinessDB('INSERT INTO pending_intents(bot_id,session_id,kind,date_time,service) VALUES($1,$2,$3,$4,$5) ON CONFLICT (bot_id,session_id) DO UPDATE SET kind=EXCLUDED.kind, date_time=EXCLUDED.date_time, service=EXCLUDED.service, created_at=NOW()', [bot_id, session_id, kind, date_time, service||null]); }
+async function setPending(bot_id, session_id, kind, isoDate, service){ await queryBusinessDB('INSERT INTO pending_intents(bot_id,session_id,kind,date_time,service) VALUES($1,$2,$3,$4::timestamptz,$5) ON CONFLICT (bot_id,session_id) DO UPDATE SET kind=EXCLUDED.kind, date_time=EXCLUDED.date_time, service=EXCLUDED.service, created_at=NOW()', [bot_id, session_id, kind, isoDate, service||null]); }
 async function clearPending(bot_id, session_id){ await queryBusinessDB('DELETE FROM pending_intents WHERE bot_id=$1 AND session_id=$2', [bot_id, session_id]); }
 /* Chat */
 app.post('/api/chat', async (req,res)=>{
@@ -128,7 +129,7 @@ app.post('/api/chat', async (req,res)=>{
     const rules = await queryBusinessDB('SELECT * FROM business_rules WHERE bot_id=$1 AND (mode=$2 OR mode=$3) ORDER BY priority DESC', [bot_id, cfg.mode, 'common']);
     const profile = await getBusinessProfile(bot_id);
 
-    // Pending flow: if there is a pending reservation awaiting name and user says no -> cancel
+    // Pending flow: awaiting name
     if(session_id){
       const pend = await getPending(bot_id, session_id);
       if(pend && pend.kind==='awaiting_name'){
@@ -137,16 +138,18 @@ app.post('/api/chat', async (req,res)=>{
           await clearPending(bot_id, session_id);
           return res.json({ ok:true, reply: 'Cancelado. Si querés otro horario, decime.' });
         }
-        // If looks like a name -> confirm booking
+        if(/\b(si|sí|dale|ok|me interesa|perfecto|confirmar|confirmo)\b/.test(txt)){
+          return res.json({ ok:true, reply: 'Decime nombre y apellido para confirmar.' });
+        }
         if(/[a-zA-Zñáéíóúü]{2,}/.test(message)){
-          const dtISO = pend.date_time.toISOString().slice(0,19).replace('T',' ');
+          const pendISO = new Date(pend.date_time).toISOString();
           const [cfgRow] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
           const slot = Number(cfgRow?.slot_minutes || 30);
-          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dtISO, slot]);
+          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamptz - ($3 * interval '1 minute')) AND ($2::timestamptz + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, pendISO, slot]);
           if(clash.length){ await clearPending(bot_id, session_id); return res.json({ ok:true, reply:'Se ocupó ese horario. ¿Querés que te proponga alternativas?' }); }
-          await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, message.trim(), dtISO, pend.service||null]);
+          await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, message.trim(), pendISO, pend.service||null]);
           await clearPending(bot_id, session_id);
-          const human = fmtHuman(pend.date_time.toISOString());
+          const human = DateTime.fromISO(pendISO, { setZone:true }).setZone('America/Argentina/Cordoba').setLocale('es-AR').toFormat("cccc d 'de' LLLL 'a las' HH:mm");
           const conf = `Listo. Turno para ${message.trim()} el ${human}. ${profile.address ? ('Te espero en '+profile.address+'.') : ''}`.trim();
           return res.json({ ok:true, reply: conf });
         }
@@ -167,15 +170,13 @@ app.post('/api/chat', async (req,res)=>{
       name: profile.name, address: profile.address, hours: profile.hours, phone: profile.phone,
       payment_methods: profile.payment_methods, cash_discount: profile.cash_discount,
       service_list: profile.service_list, cancellation_policy: profile.cancellation_policy,
-      date_time: '', product_catalog: ''
+      date_time: '', product_catalog: '', services_hint: profile.service_list ? ('Servicios: '+profile.service_list+'.') : ''
     };
     try{ const names = await getProductCatalog(bot_id, 20); if(names.length) ctxBase.product_catalog = names.join(', '); }catch{}
 
     if(matched){
       let ctx = { ...ctxBase };
       if(/\{product_name\}|\{price\}|\{stock\}/.test(matched.action)){ const p = await findProductLike(bot_id, message); if(p){ ctx.product_name = p.name; ctx.price = p.price; ctx.stock = p.stock; } }
-      // services_hint for crear_turno
-      ctx.services_hint = profile.service_list ? ('Servicios: '+profile.service_list+'.') : '';
       let replyTpl = fillTemplate(matched.action, ctx);
       replyTpl = resolveMissingPlaceholders(replyTpl, profile);
       if(/\{[a-z_]+\}/i.test(replyTpl)){
@@ -188,17 +189,15 @@ app.post('/api/chat', async (req,res)=>{
           replyTpl = 'Necesito un dato más para responderte. ¿Podés aclarar?';
         }
       }
-      // If reservation availability phrase with a concrete time, set pending and ask name
       if(cfg.mode==='reservations' && (matched.condition==='comprobar_disponibilidad' || matched.condition==='crear_turno')){
         const dt = await ensureISODate(message);
         if(dt){
           const [cfgRow] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
           const slot = Number(cfgRow?.slot_minutes || 30);
-          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dt, slot]);
+          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamptz - ($3 * interval '1 minute')) AND ($2::timestamptz + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dt, slot]);
           if(!clash.length && session_id){
-            await setPending(bot_id, session_id, 'awaiting_name', new Date(dt), null);
-            const human = fmtHuman(dt);
-            const conf = `Tengo disponibilidad el ${human}. Decime tu nombre para confirmar.`;
+            await setPending(bot_id, session_id, 'awaiting_name', dt, null);
+            const conf = `Tengo disponibilidad el ${fmtHuman(dt)}. Decime tu nombre para confirmar.`;
             return res.json({ ok:true, reply: conf });
           }
           if(clash.length){
@@ -242,10 +241,10 @@ app.post('/api/chat', async (req,res)=>{
         else{
           const [cfgRow] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
           const slot = Number(cfgRow?.slot_minutes || 30);
-          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dt, slot]);
+          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamptz - ($3 * interval '1 minute')) AND ($2::timestamptz + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dt, slot]);
           if(clash.length){ reply = 'Ese horario no está disponible. ¿Querés que te proponga alternativas?'; }
           else if(session_id){
-            await setPending(bot_id, session_id, 'awaiting_name', new Date(dt), slots.service||null);
+            await setPending(bot_id, session_id, 'awaiting_name', dt, slots.service||null);
             reply = `Tengo disponibilidad el ${fmtHuman(dt)}. Decime tu nombre para confirmar.`;
           } else {
             reply = 'Hay disponibilidad. Decime tu nombre para confirmar.';

@@ -1,13 +1,17 @@
-# Assistant Bot Prod v2.6
+# Assistant Bot Prod v2.8
 
-- Reservas con confirmación: guarda intención pendiente por `session_id`, pide nombre y confirma.
-- Estilos sin inline para CSP.
-- Placeholders con valores por defecto si falta config.
-- Heurística de fechas y fallback a LLM.
-- Multi-tenant.
+UI mejorada
+- Burbujas de chat, tarjetas, inputs y botones.
+- Tecla Enter para enviar.
+- Sin estilos inline. CSP ok.
 
-## Uso
+Backend
+- Reservas robustas con TIMESTAMPTZ, pending intents, NLU opcional, placeholders con defaults.
+
+Setup
+```
 cp .env.example .env
 npm i
 npm run init:db
 npm start
+```
