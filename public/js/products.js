@@ -1,0 +1,27 @@
+async function load(){
+  const bot_id = document.querySelector('input[name="bot_id"]').value || 'default';
+  const res = await fetch('/api/products?bot_id='+encodeURIComponent(bot_id)); const data = await res.json();
+  const list = document.getElementById('list'); list.innerHTML='';
+  data.forEach(p=>{
+    const li = document.createElement('li');
+    li.textContent = p.name + ' - $' + p.price + ' (stock:'+p.stock+')';
+    list.appendChild(li);
+  });
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('f').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    await fetch('/api/products',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        bot_id: f.bot_id.value || 'default',
+        name: f.name.value,
+        price: parseFloat(f.price.value),
+        stock: parseInt(f.stock.value)
+      })
+    });
+    f.reset(); load();
+  });
+  load();
+});

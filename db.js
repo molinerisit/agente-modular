@@ -6,7 +6,6 @@ function sslOpt(url){
   if(!url) return undefined;
   return url.includes('railway.app') ? { rejectUnauthorized: false } : undefined;
 }
-
 const botPool = new Pool({ connectionString: process.env.BOT_DB_URL, ssl: sslOpt(process.env.BOT_DB_URL) });
 const businessPool = new Pool({ connectionString: process.env.BUSINESS_DB_URL, ssl: sslOpt(process.env.BUSINESS_DB_URL) });
 
@@ -15,7 +14,7 @@ async function query(pool, text, params){
   try{ const r = await c.query(text, params); return r.rows; }
   finally{ c.release(); }
 }
-const queryBotDB = (t,p)=> query(botPool,t,p);
-const queryBusinessDB = (t,p)=> query(businessPool,t,p);
-
-module.exports = { queryBotDB, queryBusinessDB };
+module.exports = {
+  queryBotDB: (t,p)=> query(botPool,t,p),
+  queryBusinessDB: (t,p)=> query(businessPool,t,p),
+};

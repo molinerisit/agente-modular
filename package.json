@@ -1,14 +1,13 @@
 {
   "name": "assistant-bot-prod",
-  "version": "2.1.0",
-  "description": "Bot multi-tenant (ventas/reservas) con NLU acotado, fallbacks semánticos y grounding en DB",
+  "version": "2.3.0",
+  "description": "Bot multi-tenant ventas/reservas con NLU acotado, fallbacks, CSP-safe",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "init:db": "node dbInit.js",
-    "rules:restore": "curl -s -X POST http://localhost:${PORT:-3000}/api/rules/restore-defaults"
+    "init:db": "node dbInit.js"
   },
   "dependencies": {
     "axios": "^1.7.4",

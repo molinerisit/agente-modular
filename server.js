@@ -7,22 +7,31 @@ const path = require('path');
 const axios = require('axios');
 const { DateTime } = require('luxon');
 const { z } = require('zod');
+const RATE = require('express-rate-limit');
 
 const { queryBotDB, queryBusinessDB } = require('./db');
 const { initDB } = require('./dbInit');
 
 const app = express();
-
-/* ---------- Security & middlewares ---------- */
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "script-src": ["'self'"],
+      "connect-src": ["'self'"],
+      "img-src": ["'self'","data:"],
+      "style-src": ["'self'"],
+      "object-src": ["'none'"]
+    }
+  }
+}));
 app.use(cors({ origin: true }));
 app.use(express.json({ limit:'512kb' }));
 app.use(morgan('tiny'));
 app.use(express.static(path.join(__dirname,'public')));
+app.use('/api/', RATE({ windowMs: 60_000, max: 180 }));
 
 const PORT = process.env.PORT || 3000;
-const RATE = require('express-rate-limit');
-app.use('/api/', RATE({ windowMs: 60_000, max: 180 })); // 180 rpm por IP
 
 /* ---------- Utils ---------- */
 function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]+/g,''); }
@@ -46,9 +55,7 @@ function includesTrigger(msg, trig){
   }
   return msg.includes(t);
 }
-function tokenize(str){
-  return norm(str).split(/[^a-z0-9]+/).filter(t=>t.length>2);
-}
+function tokenize(str){ return norm(str).split(/[^a-z0-9]+/).filter(t=>t.length>2); }
 function jaccard(a, b){
   const A = new Set(a); const B = new Set(b);
   const inter = new Set([...A].filter(x=>B.has(x))).size;
@@ -62,14 +69,12 @@ function semanticRuleFallback(message, rules){
     const triggers = parseTriggers(r.triggers);
     for(const t of triggers){
       const sc = jaccard(msgTok, tokenize(String(t)));
-      if(sc >= 0.34){
-        if(!best || sc > best.score) best = { rule:r, score: sc };
-      }
+      if(sc >= 0.34){ if(!best || sc > best.score) best = { rule:r, score: sc }; }
     }
   }
   return best ? best.rule : null;
 }
-async function getProductCatalog(bot_id, limit=10){
+async function getProductCatalog(bot_id, limit=20){
   const rows = await queryBusinessDB('SELECT name FROM products WHERE bot_id=$1 ORDER BY id DESC LIMIT $2', [bot_id, limit]);
   return rows.map(r=>r.name);
 }
@@ -98,38 +103,36 @@ async function getBusinessProfile(bot_id='default'){
 }
 function toISOorNull(s){
   if(!s) return null;
-  // acepta "YYYY-MM-DDTHH:mm" o "YYYY-MM-DD HH:mm:ss"
   const t = String(s).replace('T',' ');
   const dt = DateTime.fromSQL(t, { zone:'America/Argentina/Cordoba' });
   return dt.isValid ? dt.toISO({ suppressMilliseconds:true }) : null;
 }
 async function intentNLU(message, mode){
   if(!process.env.OPENAI_API_KEY) return { intent:'unknown', slots:{} };
-  const sys = `Eres un clasificador. Devuelve JSON con {{intent, slots}}.
+  const sys = `Eres un clasificador. Devuelve JSON con {intent, slots}.
 Intents permitidos (sales): ["ask_price","ask_stock","ask_catalog","greet","bye","ask_hours","ask_address","ask_payments"].
 Intents permitidos (reservations): ["create_booking","check_availability","cancel_booking","ask_services","greet","bye","ask_hours","ask_address"].
 Slots permitidos: product_name, date_time, customer, service.
-Para date_time devuelve ISO local America/Argentina/Cordoba (YYYY-MM-DDTHH:mm:ss). No inventes datos.`;
+No inventes datos.`;
   const user = `Texto: "${message}". Modo: "${mode}". Responde SOLO JSON.`;
   const r = await axios.post('https://api.openai.com/v1/chat/completions',{
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     temperature: 0,
     messages: [{role:'system',content:sys},{role:'user',content:user}]
-  },{ timeout: 10_000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
+  },{ timeout: 10000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
   try{ return JSON.parse(r.data.choices[0].message.content); }catch{ return {intent:'unknown', slots:{}};}
 }
 async function naturalReply(context, userMessage, fallback){
   if(!process.env.OPENAI_API_KEY) return fallback;
-  const sys = `Redacta una respuesta breve y natural en español usando SOLO este contexto JSON. No agregues datos nuevos. Si falta un dato, pídelo.
-Contexto: ${JSON.stringify(context)}`;
+  const sys = `Redacta una respuesta breve y natural en español usando SOLO este contexto JSON. No agregues datos nuevos. Si falta un dato, pídelo. Contexto: ${JSON.stringify(context)}`;
   const user = `Usuario: "${userMessage}"`;
   try{
     const r = await axios.post('https://api.openai.com/v1/chat/completions',{
       model: 'gpt-4o-mini',
       temperature: 0.2,
       messages: [{role:'system',content:sys},{role:'user',content:user}]
-    },{ timeout: 8_000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
+    },{ timeout: 8000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
     return r.data.choices?.[0]?.message?.content || fallback;
   }catch{ return fallback; }
 }
@@ -191,7 +194,7 @@ app.post('/api/config', async (req,res)=>{
   }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
 });
 
-/* ---------- Rules CRUD (multi-tenant) ---------- */
+/* ---------- Rules CRUD ---------- */
 app.get('/api/rules', async (req,res)=>{
   try{
     const bot_id = req.query.bot_id || 'default';
@@ -248,7 +251,7 @@ app.post('/api/rules/restore-defaults', async (req,res)=>{
   }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
 });
 
-/* ---------- Products (multi-tenant) ---------- */
+/* ---------- Products ---------- */
 app.get('/api/products', async (req,res)=>{
   try{
     const bot_id = req.query.bot_id || 'default';
@@ -266,7 +269,7 @@ app.post('/api/products', async (req,res)=>{
   }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
 });
 
-/* ---------- Appointments (multi-tenant) ---------- */
+/* ---------- Appointments ---------- */
 app.get('/api/appointments', async (req,res)=>{
   try{
     const bot_id = req.query.bot_id || 'default';
@@ -280,11 +283,11 @@ app.get('/api/appointments/available', async (req,res)=>{
     const starts_at = toISOorNull(req.query.starts_at);
     if(!starts_at) return res.status(400).json({ ok:false, error:'Fecha inválida' });
     const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
-    const slot = cfg?.slot_minutes || 30;
+    const slot = Number(cfg?.slot_minutes || 30);
     const rows = await queryBusinessDB(`
       SELECT id FROM appointments
       WHERE bot_id=$1
-        AND starts_at BETWEEN ($2::timestamp - (($3 || ' minutes')::interval)) AND ($2::timestamp + (($3 || ' minutes')::interval))
+        AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute'))
       LIMIT 1`, [bot_id, starts_at, slot]);
     res.json({ ok:true, available: rows.length===0 });
   }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
@@ -297,11 +300,11 @@ app.post('/api/appointments', async (req,res)=>{
     const iso = toISOorNull(starts_at);
     if(!iso) return res.status(400).json({ ok:false, error:'Fecha inválida' });
     const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
-    const slot = cfg?.slot_minutes || 30;
+    const slot = Number(cfg?.slot_minutes || 30);
     const clash = await queryBusinessDB(`
       SELECT id FROM appointments
       WHERE bot_id=$1
-        AND starts_at BETWEEN ($2::timestamp - (($3 || ' minutes')::interval)) AND ($2::timestamp + (($3 || ' minutes')::interval))
+        AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute'))
       LIMIT 1`, [bot_id, iso, slot]);
     if(clash.length) return res.status(409).json({ ok:false, error:'Horario no disponible' });
     await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, customer, iso.replace('T',' ').slice(0,19), notes||null]);
@@ -343,10 +346,7 @@ app.post('/api/chat', async (req,res)=>{
       date_time: '',
       product_catalog: ''
     };
-    try{
-      const names = await getProductCatalog(bot_id, 20);
-      if(names.length) ctxBase.product_catalog = names.join(', ');
-    }catch{}
+    try{ const names = await getProductCatalog(bot_id, 20); if(names.length) ctxBase.product_catalog = names.join(', '); }catch{}
 
     if(matched){
       let ctx = { ...ctxBase };
@@ -354,7 +354,6 @@ app.post('/api/chat', async (req,res)=>{
         const p = await findProductLike(bot_id, message);
         if(p){ ctx.product_name = p.name; ctx.price = p.price; ctx.stock = p.stock; }
       }
-      // placeholder guard
       let replyTpl = fillTemplate(matched.action, ctx);
       if(/\{[a-z_]+\}/i.test(replyTpl)){
         if(/\{product_name\}|\{price\}|\{stock\}/.test(matched.action)){
@@ -369,7 +368,6 @@ app.post('/api/chat', async (req,res)=>{
       return res.json({ ok:true, reply: replyTpl });
     }
 
-    // No rule match -> IA NLU + grounded answers
     if(!process.env.OPENAI_API_KEY){
       let reply;
       if(cfg.mode==='sales'){
@@ -417,11 +415,11 @@ app.post('/api/chat', async (req,res)=>{
           reply = `Decime día y hora. Horarios: ${profile.hours||'no configurado'}.`;
         }else{
           const [cfgRow] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
-          const slot = cfgRow?.slot_minutes || 30;
+          const slot = Number(cfgRow?.slot_minutes || 30);
           const clash = await queryBusinessDB(`
             SELECT id FROM appointments
             WHERE bot_id=$1
-              AND starts_at BETWEEN ($2::timestamp - (($3 || ' minutes')::interval)) AND ($2::timestamp + (($3 || ' minutes')::interval))
+              AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute'))
             LIMIT 1`, [bot_id, dt, slot]);
           if(clash.length){
             reply = 'Ese horario no está disponible. ¿Querés que te proponga alternativas?';
@@ -451,8 +449,6 @@ app.post('/api/chat', async (req,res)=>{
         reply = (profile.service_list ? ('Podés reservar: ' + profile.service_list + '. ') : '') + 'Decime día y hora y verifico.';
       }
     }
-
-    // Redacción natural acotada a contexto
     const context = { mode: cfg.mode, reply, hours: profile.hours||null, address: profile.address||null, payments: profile.payment_methods||null, catalog: ctxBase.product_catalog||null };
     const finalReply = await naturalReply(context, message, reply);
     res.json({ ok:true, reply: finalReply });
@@ -465,6 +461,4 @@ app.post('/api/chat', async (req,res)=>{
 /* ---------- 404 for API ---------- */
 app.use('/api/*', (_req,res)=> res.status(404).json({ ok:false, error:'Not found' }));
 
-app.listen(PORT, ()=>{
-  console.log(`Server on :${PORT}`);
-});
+app.listen(PORT, ()=>{ console.log(`Server on :${PORT}`); });

@@ -1,7 +1,6 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"/><title>Config</title>
-<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<head><meta charset="utf-8"/><title>Config</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="font-family:system-ui;max-width:900px;margin:24px auto">
 <h2>Panel - datos que ve el bot</h2>
 <label>Bot ID: <input id="bot_id" value="default" /></label>
@@ -10,15 +9,5 @@
 <h3>Reglas</h3><pre id="brules"></pre>
 <h3>Productos</h3><pre id="prods"></pre>
 <h3>Reservas</h3><pre id="appts"></pre>
-<script>
-async function loadAll(){
-  const bot_id = document.getElementById('bot_id').value;
-  const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id)); const j = await r.json();
-  if(j.ok) document.getElementById('botcfg').textContent = JSON.stringify(j.config, null, 2);
-  const rr = await fetch('/api/rules?bot_id='+encodeURIComponent(bot_id)); document.getElementById('brules').textContent = JSON.stringify(await rr.json(), null, 2);
-  const p = await fetch('/api/products?bot_id='+encodeURIComponent(bot_id)); document.getElementById('prods').textContent = JSON.stringify(await p.json(), null, 2);
-  const a = await fetch('/api/appointments?bot_id='+encodeURIComponent(bot_id)); document.getElementById('appts').textContent = JSON.stringify(await a.json(), null, 2);
-}
-document.getElementById('load').addEventListener('click', loadAll);
-</script>
+<script src="/js/config.js" defer></script>
 </body></html>

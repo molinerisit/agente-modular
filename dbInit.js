@@ -17,7 +17,6 @@ async function initBotDB(){
       cancellation_policy TEXT,
       slot_minutes INTEGER NOT NULL DEFAULT 30
     );`, []);
-
   const exists = await queryBotDB('SELECT 1 FROM bot_configs WHERE bot_id=$1', ['default']);
   if(!exists.length){
     await queryBotDB('INSERT INTO bot_configs(bot_id,mode,slot_minutes) VALUES($1,$2,$3)', ['default','sales',30]);
@@ -25,7 +24,7 @@ async function initBotDB(){
 }
 
 async function initBusinessDB(){
-  // 1) Crear tablas si faltan
+  // Crear si faltan
   await queryBusinessDB(`
     CREATE TABLE IF NOT EXISTS products(
       id SERIAL PRIMARY KEY,
@@ -48,8 +47,7 @@ async function initBusinessDB(){
       priority INTEGER NOT NULL DEFAULT 50
     );
   `, []);
-
-  // 2) Migraciones idempotentes: agregar bot_id si falta
+  // Migraciones: agregar bot_id si falta
   await queryBusinessDB(`ALTER TABLE products ADD COLUMN IF NOT EXISTS bot_id TEXT`, []);
   await queryBusinessDB(`UPDATE products SET bot_id='default' WHERE bot_id IS NULL`, []);
   await queryBusinessDB(`ALTER TABLE products ALTER COLUMN bot_id SET NOT NULL`, []);
@@ -66,7 +64,7 @@ async function initBusinessDB(){
   await queryBusinessDB(`ALTER TABLE business_rules ALTER COLUMN bot_id SET NOT NULL`, []);
   await queryBusinessDB(`CREATE INDEX IF NOT EXISTS idx_rules_bot ON business_rules(bot_id)`, []);
 
-  // 3) Seed defaults para el bot indicado si no hay reglas
+  // Seed defaults si no hay reglas para default
   const cnt = await queryBusinessDB('SELECT COUNT(*)::int AS c FROM business_rules WHERE bot_id=$1', ['default']);
   if(!cnt[0] || cnt[0].c === 0){
     const fs = require('fs'); const path = require('path');
