@@ -1,1 +1,29 @@
-async function load(){const e=document.querySelector('input[name="bot_id"]').value||"default",t=await fetch("/api/appointments?bot_id="+encodeURIComponent(e)),n=await t.json(),o=document.getElementById("list");o.innerHTML="",n.forEach(e=>{const t=document.createElement("li");t.textContent=e.customer+" - "+e.starts_at+" ("+(e.notes||"")+")",o.appendChild(t)})}document.addEventListener("DOMContentLoaded",()=>{document.getElementById("f").addEventListener("submit",async e=>{e.preventDefault();const t=e.target,a={bot_id:t.bot_id.value||"default",customer:t.customer.value,starts_at:t.starts_at.value,notes:t.notes.value},n=await fetch("/api/appointments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)});n.ok||(alert("No se pudo agendar: "+(await n.text()))),t.reset(),load()}),load()});
+async function load(){
+  const bot_id = document.querySelector('input[name="bot_id"]').value || 'default';
+  const res = await fetch('/api/appointments?bot_id='+encodeURIComponent(bot_id)); const data = await res.json();
+  const list = document.getElementById('list'); list.innerHTML='';
+  data.forEach(a=>{
+    const li = document.createElement('li');
+    li.textContent = a.customer + ' - ' + a.starts_at + ' ('+(a.notes||'')+')';
+    list.appendChild(li);
+  });
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('f').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const payload = {
+      bot_id: f.bot_id.value || 'default',
+      customer: f.customer.value,
+      starts_at: f.starts_at.value,
+      notes: f.notes.value
+    };
+    const r = await fetch('/api/appointments',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok){ alert('No se pudo agendar: ' + (await r.text())); }
+    f.reset(); load();
+  });
+  load();
+});

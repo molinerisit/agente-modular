@@ -21,23 +21,31 @@ async function initBotDB(){
 }
 async function initBusinessDB(){
   await queryBusinessDB(`
-    CREATE TABLE IF NOT EXISTS products(id SERIAL PRIMARY KEY, name TEXT NOT NULL, price NUMERIC(12,2) NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS appointments(id SERIAL PRIMARY KEY, customer TEXT NOT NULL, starts_at TIMESTAMP NOT NULL, notes TEXT);
-    CREATE TABLE IF NOT EXISTS business_rules(id SERIAL PRIMARY KEY, mode TEXT NOT NULL, condition TEXT NOT NULL, triggers JSONB, action TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 50);
+    CREATE TABLE IF NOT EXISTS products(id SERIAL PRIMARY KEY, name TEXT NOT NULL, price NUMERIC(12,2) NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0, bot_id TEXT);
+    CREATE TABLE IF NOT EXISTS appointments(id SERIAL PRIMARY KEY, customer TEXT NOT NULL, starts_at TIMESTAMP NOT NULL, notes TEXT, bot_id TEXT);
+    CREATE TABLE IF NOT EXISTS business_rules(id SERIAL PRIMARY KEY, mode TEXT NOT NULL, condition TEXT NOT NULL, triggers JSONB, action TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 50, bot_id TEXT);
+    CREATE TABLE IF NOT EXISTS pending_intents(
+      bot_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      date_time TIMESTAMP,
+      service TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(bot_id, session_id)
+    );
   `, []);
-  await queryBusinessDB(`ALTER TABLE products ADD COLUMN IF NOT EXISTS bot_id TEXT`, []);
+  // Ensure not null bot_id with default
   await queryBusinessDB(`UPDATE products SET bot_id='default' WHERE bot_id IS NULL`, []);
   await queryBusinessDB(`ALTER TABLE products ALTER COLUMN bot_id SET NOT NULL`, []);
   await queryBusinessDB(`CREATE INDEX IF NOT EXISTS idx_products_bot ON products(bot_id)`, []);
-  await queryBusinessDB(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS bot_id TEXT`, []);
   await queryBusinessDB(`UPDATE appointments SET bot_id='default' WHERE bot_id IS NULL`, []);
   await queryBusinessDB(`ALTER TABLE appointments ALTER COLUMN bot_id SET NOT NULL`, []);
   await queryBusinessDB(`CREATE INDEX IF NOT EXISTS idx_appointments_bot ON appointments(bot_id)`, []);
   await queryBusinessDB(`CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(starts_at)`, []);
-  await queryBusinessDB(`ALTER TABLE business_rules ADD COLUMN IF NOT EXISTS bot_id TEXT`, []);
   await queryBusinessDB(`UPDATE business_rules SET bot_id='default' WHERE bot_id IS NULL`, []);
   await queryBusinessDB(`ALTER TABLE business_rules ALTER COLUMN bot_id SET NOT NULL`, []);
   await queryBusinessDB(`CREATE INDEX IF NOT EXISTS idx_rules_bot ON business_rules(bot_id)`, []);
+
   const cnt = await queryBusinessDB('SELECT COUNT(*)::int AS c FROM business_rules WHERE bot_id=$1', ['default']);
   if(!cnt[0] || cnt[0].c === 0){
     const fs = require('fs'); const path = require('path');

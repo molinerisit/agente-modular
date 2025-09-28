@@ -27,7 +27,8 @@
         "hasta luego",
         "gracias",
         "hasta pronto",
-        "bye"
+        "bye",
+        "no gracias"
       ],
       "action": "Gracias por tu visita.",
       "priority": 105
@@ -214,10 +215,12 @@
         "quiero un turno",
         "reservar",
         "agendar",
-        "sacar turno"
+        "sacar turno",
+        "quiero reservar",
+        "quiero hacer una reserva"
       ],
-      "action": "¿Para qué servicio y día/hora te gustaría? Servicios: {service_list}.",
-      "priority": 100
+      "action": "¿Para qué servicio y día/hora te gustaría? {services_hint}",
+      "priority": 104
     },
     {
       "mode": "reservations",
@@ -230,7 +233,8 @@
         "hay lugar",
         "hay lugar?",
         "tenes lugar",
-        "tenés lugar"
+        "tenés lugar",
+        "puede ser"
       ],
       "action": "Verifico disponibilidad para {date_time}.",
       "priority": 100

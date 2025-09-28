@@ -1,0 +1,6 @@
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; max-width: 900px; margin: 24px auto; }
+.container { max-width: 800px; margin: 24px auto; }
+.row { margin: 8px 0; }
+#chat { border: 1px solid #ddd; padding: 10px; height: 320px; overflow: auto; }
+.bold { font-weight: 600; }
+.panel { margin-bottom: 12px; padding: 8px; border: 1px solid #ddd; }

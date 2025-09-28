@@ -1,3 +1,90 @@
-const FILTER_KEY="rules_filter_mode_v2";async function load(){const e=document.getElementById("mode"),t=e.value;localStorage.setItem(FILTER_KEY,t);const a=document.querySelector("input#bot_id").value||"default",o="/api/rules?bot_id="+encodeURIComponent(a)+(t?"&mode="+encodeURIComponent(t):""),n=await fetch(o),d=await n.json(),l=document.getElementById("list");l.innerHTML="",d.forEach(e=>{const t=Array.isArray(e.triggers)?e.triggers:JSON.parse(e.triggers||"[]"),a=document.createElement("li");a.innerHTML="<b>["+e.mode+"] "+e.condition+"</b> (pri:"+e.priority+")<br/>"+t.join(", ")+"<br/>"+e.action+"<br/><button data-id=""+e.id+"" class="edit">Editar</button> <button data-id=""+e.id+"" class="del">Eliminar</button>",l.appendChild(a)})}document.addEventListener("DOMContentLoaded",()=>{document.getElementById("load").addEventListener("click",load),document.getElementById("restore").addEventListener("click",async()=>{const e=document.querySelector("input#bot_id").value||"default";confirm("Restaurar reglas base (se eliminarán las actuales)?")&&(await fetch("/api/rules/restore-defaults",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bot_id:e})}),load())}),document.getElementById("form").addEventListener("submit",async e=>{e.preventDefault();const t=e.target,a={bot_id:t.bot_id.value||"default",mode:t.mode.value,condition:t.condition.value,triggers:t.triggers.value.split("
-").map(e=>e.trim()).filter(Boolean),action:t.action.value,priority:parseInt(t.priority.value)||50},o=t.id.value;o?await fetch("/api/rules/"+o,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}):await fetch("/api/rules",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}),t.reset(),load()}),document.getElementById("list").addEventListener("click",async e=>{if(e.target.classList.contains("del")){const t=e.target.getAttribute("data-id");confirm("Eliminar regla?")&&(await fetch("/api/rules/"+t,{method:"DELETE"}),load())}else if(e.target.classList.contains("edit")){const t=e.target.getAttribute("data-id"),a=document.querySelector("input#bot_id").value||"default",o=await fetch("/api/rules?bot_id="+encodeURIComponent(a)),n=await o.json(),d=n.find(e=>String(e.id)===String(t));if(d){const e=document.getElementById("form");e.id.value=d.id,e.bot_id.value=d.bot_id||a,e.mode.value=d.mode;const t=Array.isArray(d.triggers)?d.triggers:JSON.parse(d.triggers||"[]");e.condition.value=d.condition,e.triggers.value=t.join("
-"),e.action.value=d.action,e.priority.value=d.priority,window.scrollTo(0,0)}}});async function loadBotMode(){const e=document.getElementById("bot_id").value||"default",t=await fetch("/api/config?bot_id="+encodeURIComponent(e)),a=await t.json();a.ok&&a.config&&(document.getElementById("bot_mode").value=a.config.mode)}document.getElementById("saveMode").addEventListener("click",async()=>{const e=document.getElementById("bot_id").value||"default",t=document.getElementById("bot_mode").value,a=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bot_id:e,mode:t})}),o=(await a.json()).ok;document.getElementById("modeMsg").textContent=o?"Guardado":"Error",setTimeout(()=>document.getElementById("modeMsg").textContent="",1500)});const saved=localStorage.getItem(FILTER_KEY);null!==saved&&(document.getElementById("mode").value=saved),load(),loadBotMode()});
+const FILTER_KEY = 'rules_filter_mode_v2';
+async function load(){
+  const modeSel = document.getElementById('mode');
+  const mode = modeSel.value;
+  localStorage.setItem(FILTER_KEY, mode);
+  const bot_id = document.querySelector('input#bot_id').value || 'default';
+  const url = '/api/rules?bot_id='+encodeURIComponent(bot_id)+(mode ? '&mode='+encodeURIComponent(mode) : '');
+  const res = await fetch(url); const data = await res.json();
+  const list = document.getElementById('list'); list.innerHTML='';
+  data.forEach(r=>{
+    const triggers = Array.isArray(r.triggers)?r.triggers:JSON.parse(r.triggers||'[]');
+    const li = document.createElement('li');
+    li.innerHTML = '<b>['+r.mode+'] '+r.condition+'</b> (pri:'+r.priority+')<br/>'+triggers.join(', ')+'<br/>'+r.action + '<br/>' + 
+      '<button data-id="'+r.id+'" class="edit">Editar</button> <button data-id="'+r.id+'" class="del">Eliminar</button>';
+    list.appendChild(li);
+  });
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('load').addEventListener('click', load);
+  document.getElementById('restore').addEventListener('click', async ()=>{
+    const bot_id = document.querySelector('input#bot_id').value || 'default';
+    if(!confirm('Restaurar reglas base (se eliminarán las actuales)?')) return;
+    await fetch('/api/rules/restore-defaults',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bot_id })});
+    load();
+  });
+  document.getElementById('form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const obj = { 
+      bot_id: f.bot_id.value || 'default',
+      mode: f.mode.value, 
+      condition: f.condition.value, 
+      triggers: f.triggers.value.split('\n').map(s=>s.trim()).filter(Boolean), 
+      action: f.action.value, 
+      priority: parseInt(f.priority.value)||50 
+    };
+    const id = f.id.value;
+    if(id){
+      await fetch('/api/rules/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
+    } else {
+      await fetch('/api/rules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj) });
+    }
+    f.reset(); load();
+  });
+  document.getElementById('list').addEventListener('click', async (e)=>{
+    if(e.target.classList.contains('del')){
+      const id = e.target.getAttribute('data-id');
+      if(confirm('Eliminar regla?')){ await fetch('/api/rules/'+id,{method:'DELETE'}); load(); }
+    } else if(e.target.classList.contains('edit')){
+      const id = e.target.getAttribute('data-id');
+      const bot_id = document.querySelector('input#bot_id').value || 'default';
+      const res = await fetch('/api/rules?bot_id='+encodeURIComponent(bot_id)); const rules = await res.json();
+      const r = rules.find(x=>String(x.id)===String(id));
+      if(r){
+        const f = document.getElementById('form');
+        f.id.value = r.id;
+        f.bot_id.value = r.bot_id || bot_id;
+        f.mode.value = r.mode;
+        const triggers = Array.isArray(r.triggers)?r.triggers:JSON.parse(r.triggers||'[]');
+        f.condition.value = r.condition;
+        f.triggers.value = triggers.join('\n');
+        f.action.value = r.action;
+        f.priority.value = r.priority;
+        window.scrollTo(0,0);
+      }
+    }
+  });
+  async function loadBotMode(){
+    const bot_id = document.getElementById('bot_id').value || 'default';
+    const r = await fetch('/api/config?bot_id='+encodeURIComponent(bot_id));
+    const j = await r.json();
+    if(j.ok && j.config){ document.getElementById('bot_mode').value = j.config.mode; }
+  }
+  document.getElementById('saveMode').addEventListener('click', async ()=>{
+    const bot_id = document.getElementById('bot_id').value || 'default';
+    const mode = document.getElementById('bot_mode').value;
+    const r = await fetch('/api/config', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ bot_id, mode })
+    });
+    const ok = (await r.json()).ok;
+    document.getElementById('modeMsg').textContent = ok ? 'Guardado' : 'Error';
+    setTimeout(()=> document.getElementById('modeMsg').textContent='', 1500);
+  });
+  const saved = localStorage.getItem(FILTER_KEY);
+  if(saved!==null){ document.getElementById('mode').value = saved; }
+  load();
+  loadBotMode();
+});

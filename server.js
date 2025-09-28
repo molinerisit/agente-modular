@@ -22,6 +22,15 @@ const PORT = process.env.PORT || 3000;
 /* Utils */
 function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]+/g,''); }
 function fillTemplate(tpl, ctx){ return String(tpl).replace(/\{([a-z_]+)\}/gi, (_, k) => { const v = ctx[k]; return v === undefined || v === null ? `{${k}}` : String(v); }); }
+function resolveMissingPlaceholders(text, profile){
+  return String(text)
+    .replace(/\{service_list\}/g, profile.service_list ? profile.service_list : 'los servicios disponibles')
+    .replace(/\{hours\}/g, profile.hours ? profile.hours : 'no están configurados')
+    .replace(/\{address\}/g, profile.address ? profile.address : 'nuestra dirección')
+    .replace(/\{phone\}/g, profile.phone ? profile.phone : 'nuestro teléfono')
+    .replace(/\{payment_methods\}/g, profile.payment_methods ? profile.payment_methods : 'medios de pago disponibles')
+    .replace(/\{cancellation_policy\}/g, profile.cancellation_policy ? profile.cancellation_policy : 'no configurada');
+}
 function parseTriggers(v){ if(!v) return []; if(Array.isArray(v)) return v; try{ return JSON.parse(v); }catch{ return []; } }
 function includesTrigger(msg, trig){ const t = norm(String(trig)); if(!t) return false; if(t.length <= 3){ const re = new RegExp('(^|\\W)'+t+'(?=\\W|$)'); return re.test(msg); } return msg.includes(t); }
 function tokenize(str){ return norm(str).split(/[^a-z0-9]+/).filter(t=>t.length>2); }
@@ -38,7 +47,7 @@ async function ensureISODate(text){
   try{
     const str = norm(text);
     const dowMap = {'lunes':1,'martes':2,'miercoles':3,'miércoles':3,'jueves':4,'viernes':5,'sabado':6,'sábado':6,'domingo':7};
-    let m = str.match(/(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)(?:\\s+(proximo|pr\\u00f3ximo))?.*?(\\d{1,2})(?::(\\d{2}))?/);
+    let m = str.match(/(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)(?:\s+(proximo|pr\u00f3ximo))?.*?(\d{1,2})(?::(\d{2}))?/);
     if(m){
       const day = m[1]; const next = !!m[2];
       const hh = parseInt(m[3],10); const mm = m[4]?parseInt(m[4],10):0;
@@ -55,7 +64,7 @@ async function ensureISODate(text){
   if(process.env.OPENAI_API_KEY){
     try{
       const sys = 'Convierte a ISO YYYY-MM-DDTHH:mm:ss en zona America/Argentina/Cordoba. Si no entiendes, responde null.';
-      const user = 'Frase: \"'+text+'\". Responde SOLO el ISO o null.';
+      const user = 'Frase: "'+text+'". Responde SOLO el ISO o null.';
       const r = await axios.post('https://api.openai.com/v1/chat/completions',{ model:'gpt-4o-mini', temperature:0, messages:[{role:'system',content:sys},{role:'user',content:user}] },{ timeout:8000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
       const out = (r.data.choices && r.data.choices[0] && r.data.choices[0].message && r.data.choices[0].message.content || '').trim();
       const iso = toISOorNull(out); if(iso) return iso;
@@ -73,6 +82,10 @@ Slots permitidos: product_name, date_time, customer, service. No inventes datos.
   const r = await axios.post('https://api.openai.com/v1/chat/completions',{ model:'gpt-4o-mini', response_format:{type:'json_object'}, temperature:0, messages:[{role:'system',content:sys},{role:'user',content:user}] },{ timeout:10000, headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}` } });
   try{ return JSON.parse(r.data.choices[0].message.content); }catch{ return {intent:'unknown', slots:{}};}
 }
+function fmtHuman(dtISO){
+  const dt = DateTime.fromISO(dtISO, { zone:'America/Argentina/Cordoba' });
+  return dt.isValid ? dt.setLocale('es-AR').toFormat("cccc d 'de' LLLL 'a las' HH:mm") : dtISO;
+}
 async function naturalReply(context, userMessage, fallback){
   if(!process.env.OPENAI_API_KEY) return fallback;
   const sys = `Redacta una respuesta breve y natural en español usando SOLO este contexto JSON. No agregues datos nuevos. Si falta un dato, pídelo. Contexto: ${JSON.stringify(context)}`;
@@ -87,63 +100,133 @@ app.get('/healthz', (_req,res)=> res.json({ ok:true, ts: Date.now() }));
 const cfgPatchSchema = z.object({ bot_id:z.string().min(1).optional(), mode:z.enum(['sales','reservations']).optional(), name:z.string().optional(), address:z.string().optional(), hours:z.string().optional(), phone:z.string().optional(), payment_methods:z.string().optional(), cash_discount:z.string().optional(), service_list:z.string().optional(), cancellation_policy:z.string().optional(), slot_minutes:z.number().int().min(5).max(240).optional() });
 const productCreateSchema = z.object({ bot_id:z.string().default('default'), name:z.string().min(1), price:z.number().nonnegative(), stock:z.number().int().nonnegative() });
 const apptCreateSchema = z.object({ bot_id:z.string().default('default'), customer:z.string().min(1), starts_at:z.string().min(5), notes:z.string().optional() });
+/* Config */
 app.get('/api/config', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const cfg = await ensureBotConfig(bot_id); res.json({ ok:true, config: cfg }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 app.post('/api/config', async (req,res)=>{ try{ const parsed = cfgPatchSchema.safeParse(req.body||{}); if(!parsed.success) return res.status(400).json({ ok:false, error:'Bad config payload' }); const { bot_id='default', ...patch } = parsed.data; await ensureBotConfig(bot_id); const keys = Object.keys(patch); if(keys.length){ const sets = keys.map((k,i)=> `${k}=$${i+2}`).join(', '); const vals = keys.map(k=> patch[k]); await queryBotDB(`UPDATE bot_configs SET ${sets} WHERE bot_id=$1`, [bot_id, ...vals]); } res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
+/* Rules CRUD */
 app.get('/api/rules', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const mode = req.query.mode; const sql = mode ? 'SELECT * FROM business_rules WHERE bot_id=$1 AND mode=$2 ORDER BY priority DESC' : 'SELECT * FROM business_rules WHERE bot_id=$1 ORDER BY priority DESC'; const rows = await queryBusinessDB(sql, mode ? [bot_id, mode] : [bot_id]); res.json(rows); }catch(e){ res.status(500).json({ error: e.message }); } });
 app.post('/api/rules', async (req,res)=>{ try{ const { bot_id='default', mode, condition, triggers=[], action, priority=50 } = req.body || {}; await queryBusinessDB('INSERT INTO business_rules(bot_id,mode,condition,triggers,action,priority) VALUES($1,$2,$3,$4,$5,$6)', [bot_id, mode, condition, JSON.stringify(triggers), action, priority]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 app.put('/api/rules/:id', async (req,res)=>{ try{ const id = req.params.id; const { bot_id='default', mode, condition, triggers=[], action, priority=50 } = req.body || {}; await queryBusinessDB('UPDATE business_rules SET bot_id=$2, mode=$3, condition=$4, triggers=$5, action=$6, priority=$7 WHERE id=$1', [id, bot_id, mode, condition, JSON.stringify(triggers), action, priority]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 app.delete('/api/rules/:id', async (req,res)=>{ try{ const id = req.params.id; await queryBusinessDB('DELETE FROM business_rules WHERE id=$1',[id]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 app.post('/api/rules/restore-defaults', async (req,res)=>{ try{ const bot_id = (req.body && req.body.bot_id) || 'default'; await queryBusinessDB('DELETE FROM business_rules WHERE bot_id=$1', [bot_id]); const fs = require('fs'); const defaults = JSON.parse(fs.readFileSync(path.join(__dirname,'rules.json'),'utf-8')); const all = [...(defaults.common||[]), ...(defaults.sales||[]), ...(defaults.reservations||[])]; for(const r of all){ await queryBusinessDB('INSERT INTO business_rules(bot_id,mode,condition,triggers,action,priority) VALUES($1,$2,$3,$4,$5,$6)', [bot_id, r.mode, r.condition, JSON.stringify(r.triggers||[]), r.action, r.priority||50]); } res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
+/* Products */
 app.get('/api/products', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const rows = await queryBusinessDB('SELECT * FROM products WHERE bot_id=$1 ORDER BY id DESC', [bot_id]); res.json(rows); }catch(e){ res.status(500).json({ error:e.message }); } });
 app.post('/api/products', async (req,res)=>{ try{ const parsed = productCreateSchema.safeParse(req.body||{}); if(!parsed.success) return res.status(400).json({ ok:false, error:'Bad product payload' }); const { bot_id, name, price, stock } = parsed.data; await queryBusinessDB('INSERT INTO products(bot_id,name,price,stock) VALUES($1,$2,$3,$4)', [bot_id, name, price, stock]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
+/* Appointments */
 app.get('/api/appointments', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const rows = await queryBusinessDB('SELECT * FROM appointments WHERE bot_id=$1 ORDER BY starts_at DESC', [bot_id]); res.json(rows); }catch(e){ res.status(500).json({ error:e.message }); } });
 app.get('/api/appointments/available', async (req,res)=>{ try{ const bot_id = req.query.bot_id || 'default'; const starts_at = await ensureISODate(req.query.starts_at); if(!starts_at) return res.status(400).json({ ok:false, error:'Fecha inválida' }); const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]); const slot = Number(cfg?.slot_minutes || 30); const rows = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, starts_at, slot]); res.json({ ok:true, available: rows.length===0 }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
 app.post('/api/appointments', async (req,res)=>{ try{ const parsed = apptCreateSchema.safeParse(req.body||{}); if(!parsed.success) return res.status(400).json({ ok:false, error:'Bad appointment payload' }); const { bot_id, customer, starts_at, notes } = parsed.data; const iso = await ensureISODate(starts_at); if(!iso) return res.status(400).json({ ok:false, error:'Fecha inválida' }); const [cfg] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]); const slot = Number(cfg?.slot_minutes || 30); const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, iso, slot]); if(clash.length) return res.status(409).json({ ok:false, error:'Horario no disponible' }); await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, customer, iso.replace('T',' ').slice(0,19), notes||null]); res.json({ ok:true }); }catch(e){ res.status(500).json({ ok:false, error:e.message }); } });
+/* Pending intents helpers */
+async function getPending(bot_id, session_id){ const r = await queryBusinessDB('SELECT * FROM pending_intents WHERE bot_id=$1 AND session_id=$2', [bot_id, session_id]); return r[0]; }
+async function setPending(bot_id, session_id, kind, date_time, service){ await queryBusinessDB('INSERT INTO pending_intents(bot_id,session_id,kind,date_time,service) VALUES($1,$2,$3,$4,$5) ON CONFLICT (bot_id,session_id) DO UPDATE SET kind=EXCLUDED.kind, date_time=EXCLUDED.date_time, service=EXCLUDED.service, created_at=NOW()', [bot_id, session_id, kind, date_time, service||null]); }
+async function clearPending(bot_id, session_id){ await queryBusinessDB('DELETE FROM pending_intents WHERE bot_id=$1 AND session_id=$2', [bot_id, session_id]); }
+/* Chat */
 app.post('/api/chat', async (req,res)=>{
   try{
-    const { message = '', bot_id='default' } = req.body || {};
+    const { message = '', bot_id='default', session_id=null } = req.body || {};
     const cfg = await ensureBotConfig(bot_id);
     const rules = await queryBusinessDB('SELECT * FROM business_rules WHERE bot_id=$1 AND (mode=$2 OR mode=$3) ORDER BY priority DESC', [bot_id, cfg.mode, 'common']);
+    const profile = await getBusinessProfile(bot_id);
+
+    // Pending flow: if there is a pending reservation awaiting name and user says no -> cancel
+    if(session_id){
+      const pend = await getPending(bot_id, session_id);
+      if(pend && pend.kind==='awaiting_name'){
+        const txt = norm(message);
+        if(/^(no|no gracias|gracias)$/i.test(txt) || (txt.includes('no') && txt.length<=20)){
+          await clearPending(bot_id, session_id);
+          return res.json({ ok:true, reply: 'Cancelado. Si querés otro horario, decime.' });
+        }
+        // If looks like a name -> confirm booking
+        if(/[a-zA-Zñáéíóúü]{2,}/.test(message)){
+          const dtISO = pend.date_time.toISOString().slice(0,19).replace('T',' ');
+          const [cfgRow] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
+          const slot = Number(cfgRow?.slot_minutes || 30);
+          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dtISO, slot]);
+          if(clash.length){ await clearPending(bot_id, session_id); return res.json({ ok:true, reply:'Se ocupó ese horario. ¿Querés que te proponga alternativas?' }); }
+          await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, message.trim(), dtISO, pend.service||null]);
+          await clearPending(bot_id, session_id);
+          const human = fmtHuman(pend.date_time.toISOString());
+          const conf = `Listo. Turno para ${message.trim()} el ${human}. ${profile.address ? ('Te espero en '+profile.address+'.') : ''}`.trim();
+          return res.json({ ok:true, reply: conf });
+        }
+      }
+    }
+
     const msg = norm(message);
     let matched = null;
     for (const r of rules) {
-      /* GREETING GUARD */
       if(r.condition==='saludo_basico' && !isPureGreeting(message)) { continue; }
       const triggers = parseTriggers(r.triggers);
       for (const t of triggers) { if (includesTrigger(msg, t)) { matched = r; break; } }
       if (matched) break;
     }
     if(!matched){ matched = semanticRuleFallback(message, rules); }
-    const profile = await getBusinessProfile(bot_id);
-    const ctxBase = { name: profile.name, address: profile.address, hours: profile.hours, phone: profile.phone, payment_methods: profile.payment_methods, cash_discount: profile.cash_discount, service_list: profile.service_list, cancellation_policy: profile.cancellation_policy, date_time: '', product_catalog: '' };
+
+    const ctxBase = {
+      name: profile.name, address: profile.address, hours: profile.hours, phone: profile.phone,
+      payment_methods: profile.payment_methods, cash_discount: profile.cash_discount,
+      service_list: profile.service_list, cancellation_policy: profile.cancellation_policy,
+      date_time: '', product_catalog: ''
+    };
     try{ const names = await getProductCatalog(bot_id, 20); if(names.length) ctxBase.product_catalog = names.join(', '); }catch{}
+
     if(matched){
       let ctx = { ...ctxBase };
       if(/\{product_name\}|\{price\}|\{stock\}/.test(matched.action)){ const p = await findProductLike(bot_id, message); if(p){ ctx.product_name = p.name; ctx.price = p.price; ctx.stock = p.stock; } }
+      // services_hint for crear_turno
+      ctx.services_hint = profile.service_list ? ('Servicios: '+profile.service_list+'.') : '';
       let replyTpl = fillTemplate(matched.action, ctx);
+      replyTpl = resolveMissingPlaceholders(replyTpl, profile);
       if(/\{[a-z_]+\}/i.test(replyTpl)){
         if(/\{product_name\}|\{price\}|\{stock\}/.test(matched.action)){
           const names = await getProductCatalog(bot_id, 20);
           replyTpl = names.length ? ('Algunos productos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'No tengo productos cargados.';
         } else if(/\{date_time\}/.test(matched.action)){
-          replyTpl = 'Decime día y hora'+(ctx.hours?(' (horarios: '+ctx.hours+')'):'')+'.';
+          replyTpl = 'Decime día y hora'+(profile.hours?(' (horarios: '+profile.hours+')'):'')+'.';
         } else {
           replyTpl = 'Necesito un dato más para responderte. ¿Podés aclarar?';
         }
       }
+      // If reservation availability phrase with a concrete time, set pending and ask name
+      if(cfg.mode==='reservations' && (matched.condition==='comprobar_disponibilidad' || matched.condition==='crear_turno')){
+        const dt = await ensureISODate(message);
+        if(dt){
+          const [cfgRow] = await queryBotDB('SELECT slot_minutes FROM bot_configs WHERE bot_id=$1',[bot_id]);
+          const slot = Number(cfgRow?.slot_minutes || 30);
+          const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dt, slot]);
+          if(!clash.length && session_id){
+            await setPending(bot_id, session_id, 'awaiting_name', new Date(dt), null);
+            const human = fmtHuman(dt);
+            const conf = `Tengo disponibilidad el ${human}. Decime tu nombre para confirmar.`;
+            return res.json({ ok:true, reply: conf });
+          }
+          if(clash.length){
+            return res.json({ ok:true, reply: 'Ese horario no está disponible. ¿Querés que te proponga alternativas?' });
+          }
+        }
+      }
       return res.json({ ok:true, reply: replyTpl });
     }
+
     if(!process.env.OPENAI_API_KEY){
       let reply;
-      if(cfg.mode==='sales'){ const names = await getProductCatalog(bot_id, 20); reply = names.length ? ('Vendemos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'No tengo productos cargados.'; }
-      else { reply = (profile.service_list ? ('Servicios: ' + profile.service_list + '. ') : '') + 'Decime día y hora y verifico disponibilidad.'; }
+      if(cfg.mode==='sales'){
+        const names = await getProductCatalog(bot_id, 20);
+        reply = names.length ? ('Vendemos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'No tengo productos cargados.';
+      } else {
+        reply = (profile.service_list ? ('Servicios: ' + profile.service_list + '. ') : '') + 'Decime día y hora y verifico disponibilidad.';
+      }
       return res.json({ ok:true, reply });
     }
+
     const { intent, slots } = await intentNLU(message, cfg.mode);
     let reply = '¿Podés reformular?';
     if(cfg.mode === 'sales'){
-      if(intent === 'ask_catalog'){ const names = await getProductCatalog(bot_id, 20); reply = names.length ? ('Vendemos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'Aún no hay productos cargados.'; }
-      else if(intent === 'ask_price' || intent === 'ask_stock'){
+      if(intent === 'ask_catalog'){
+        const names = await getProductCatalog(bot_id, 20);
+        reply = names.length ? ('Vendemos: ' + names.join(', ') + '. Decime cuál te interesa.') : 'Aún no hay productos cargados.';
+      } else if(intent === 'ask_price' || intent === 'ask_stock'){
         const explicit = slots.product_name; let p = null;
         if(explicit){ const r = await queryBusinessDB('SELECT * FROM products WHERE bot_id=$1 AND LOWER(name)=LOWER($2) LIMIT 1',[bot_id, explicit]); p = r[0]; }
         if(!p) p = await findProductLike(bot_id, message);
@@ -161,10 +244,12 @@ app.post('/api/chat', async (req,res)=>{
           const slot = Number(cfgRow?.slot_minutes || 30);
           const clash = await queryBusinessDB(`SELECT id FROM appointments WHERE bot_id=$1 AND starts_at BETWEEN ($2::timestamp - ($3 * interval '1 minute')) AND ($2::timestamp + ($3 * interval '1 minute')) LIMIT 1`, [bot_id, dt, slot]);
           if(clash.length){ reply = 'Ese horario no está disponible. ¿Querés que te proponga alternativas?'; }
-          else if(intent === 'create_booking'){
-            await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, slots.customer||'Cliente', dt.replace('T',' ').slice(0,19), slots.service||null]);
-            reply = `Listo. Turno para ${slots.customer||'cliente'} el ${dt}.`;
-          } else { reply = 'Hay disponibilidad. ¿Querés confirmar el turno?'; }
+          else if(session_id){
+            await setPending(bot_id, session_id, 'awaiting_name', new Date(dt), slots.service||null);
+            reply = `Tengo disponibilidad el ${fmtHuman(dt)}. Decime tu nombre para confirmar.`;
+          } else {
+            reply = 'Hay disponibilidad. Decime tu nombre para confirmar.';
+          }
         }
       } else if(intent === 'cancel_booking'){ reply = `Tu turno fue cancelado. Política: ${profile.cancellation_policy||'no configurada'}.`; }
       else if(intent === 'ask_hours'){ reply = profile.hours ? `Atendemos: ${profile.hours}.` : 'No tengo horario configurado.'; }
