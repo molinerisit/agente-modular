@@ -25,7 +25,7 @@ const RATE = require('express-rate-limit');
 app.use('/api/', RATE({ windowMs: 60_000, max: 180 })); // 180 rpm por IP
 
 /* ---------- Utils ---------- */
-function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}+/gu,''); }
+function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]+/g,''); }
 function fillTemplate(tpl, ctx){
   return String(tpl).replace(/\{([a-z_]+)\}/gi, (_, k) => {
     const v = ctx[k];
@@ -284,7 +284,7 @@ app.get('/api/appointments/available', async (req,res)=>{
     const rows = await queryBusinessDB(`
       SELECT id FROM appointments
       WHERE bot_id=$1
-        AND starts_at BETWEEN ($2::timestamp - make_interval(mins => $3)) AND ($2::timestamp + make_interval(mins => $3))
+        AND starts_at BETWEEN ($2::timestamp - (($3 || ' minutes')::interval)) AND ($2::timestamp + (($3 || ' minutes')::interval))
       LIMIT 1`, [bot_id, starts_at, slot]);
     res.json({ ok:true, available: rows.length===0 });
   }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
@@ -301,7 +301,7 @@ app.post('/api/appointments', async (req,res)=>{
     const clash = await queryBusinessDB(`
       SELECT id FROM appointments
       WHERE bot_id=$1
-        AND starts_at BETWEEN ($2::timestamp - make_interval(mins => $3)) AND ($2::timestamp + make_interval(mins => $3))
+        AND starts_at BETWEEN ($2::timestamp - (($3 || ' minutes')::interval)) AND ($2::timestamp + (($3 || ' minutes')::interval))
       LIMIT 1`, [bot_id, iso, slot]);
     if(clash.length) return res.status(409).json({ ok:false, error:'Horario no disponible' });
     await queryBusinessDB('INSERT INTO appointments(bot_id,customer,starts_at,notes) VALUES($1,$2,$3,$4)', [bot_id, customer, iso.replace('T',' ').slice(0,19), notes||null]);
@@ -421,7 +421,7 @@ app.post('/api/chat', async (req,res)=>{
           const clash = await queryBusinessDB(`
             SELECT id FROM appointments
             WHERE bot_id=$1
-              AND starts_at BETWEEN ($2::timestamp - make_interval(mins => $3)) AND ($2::timestamp + make_interval(mins => $3))
+              AND starts_at BETWEEN ($2::timestamp - (($3 || ' minutes')::interval)) AND ($2::timestamp + (($3 || ' minutes')::interval))
             LIMIT 1`, [bot_id, dt, slot]);
           if(clash.length){
             reply = 'Ese horario no está disponible. ¿Querés que te proponga alternativas?';
@@ -453,7 +453,7 @@ app.post('/api/chat', async (req,res)=>{
     }
 
     // Redacción natural acotada a contexto
-    const context = { mode: cfg.mode, profile, reply, product_catalog: ctxBase.product_catalog };
+    const context = { mode: cfg.mode, reply, hours: profile.hours||null, address: profile.address||null, payments: profile.payment_methods||null, catalog: ctxBase.product_catalog||null };
     const finalReply = await naturalReply(context, message, reply);
     res.json({ ok:true, reply: finalReply });
   }catch(e){
