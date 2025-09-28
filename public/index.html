@@ -1,64 +1,49 @@
 <!doctype html>
 <html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Chat Bot</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
+<head><meta charset="utf-8"/><title>Chat Bot</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="font-family:system-ui;max-width:800px;margin:24px auto">
-  <h2>Chat Bot</h2>
-
-  <div style="margin:8px 0">
-    <label>Bot ID:
-      <input id="bot_id" value="default">
-    </label>
-    <label style="margin-left:12px">Mode:
-      <span id="mode">loading...</span>
-    </label>
-    <span style="margin-left:12px">
-      <a href="/config.html" target="_blank">Admin Config</a> |
-      <a href="/rules.html" target="_blank">Reglas</a> |
-      <a href="/products.html" target="_blank">Productos</a> |
-      <a href="/reservations.html" target="_blank">Reservas</a>
-    </span>
-  </div>
-
-  <div id="chat" style="border:1px solid #ddd;padding:10px;height:320px;overflow:auto"></div>
-  <div style="margin-top:8px">
-    <input id="msg" placeholder="Escribe..." style="width:70%">
-    <button id="send">Enviar</button>
-  </div>
-
-  <script>
-  async function loadMode() {
-    const bot_id = document.getElementById('bot_id').value;
-    const r = await fetch('/api/config?bot_id=' + encodeURIComponent(bot_id));
-    const j = await r.json();
-    if (j.ok) document.getElementById('mode').textContent = j.config.mode;
-  }
-  function append(t, cls){
-    const d = document.getElementById('chat');
-    const p = document.createElement('div');
-    p.textContent = t;
-    if(cls==='user') p.style.fontWeight='600';
-    d.appendChild(p); d.scrollTop = d.scrollHeight;
-  }
-  document.getElementById('send').addEventListener('click', async ()=>{
-    const bot_id = document.getElementById('bot_id').value;
-    const text = document.getElementById('msg').value.trim(); if(!text) return;
-    append('Tú: ' + text, 'user');
-    document.getElementById('msg').value='';
-    const res = await fetch('/api/chat', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ bot_id, message: text })
-    });
-    const j = await res.json();
-    if (j.ok) append('Bot: ' + j.reply);
-    else append('Error: ' + (j.error||''));
+<h2>Chat Bot</h2>
+<div style="margin:8px 0">
+  <label>Bot ID: <input id="bot_id" value="default"></label>
+  <label style="margin-left:12px">Mode: <span id="mode">loading...</span></label>
+  <span style="margin-left:12px">
+    <a href="/config.html" target="_blank">Admin Config</a> |
+    <a href="/rules.html" target="_blank">Reglas</a> |
+    <a href="/products.html" target="_blank">Productos</a> |
+    <a href="/reservations.html" target="_blank">Reservas</a>
+  </span>
+</div>
+<div id="chat" style="border:1px solid #ddd;padding:10px;height:320px;overflow:auto"></div>
+<div style="margin-top:8px">
+  <input id="msg" placeholder="Escribe..." style="width:70%">
+  <button id="send">Enviar</button>
+</div>
+<script>
+async function loadMode() {
+  const bot_id = document.getElementById('bot_id').value;
+  const r = await fetch('/api/config?bot_id=' + encodeURIComponent(bot_id));
+  const j = await r.json();
+  if (j.ok) document.getElementById('mode').textContent = j.config.mode;
+}
+function append(t, cls){
+  const d = document.getElementById('chat');
+  const p = document.createElement('div');
+  p.textContent = t;
+  if(cls==='user') p.style.fontWeight='600';
+  d.appendChild(p); d.scrollTop = d.scrollHeight;
+}
+document.getElementById('send').addEventListener('click', async ()=>{
+  const bot_id = document.getElementById('bot_id').value;
+  const text = document.getElementById('msg').value.trim(); if(!text) return;
+  append('Tú: ' + text, 'user'); document.getElementById('msg').value='';
+  const res = await fetch('/api/chat', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ bot_id, message: text })
   });
-
-  document.getElementById('bot_id').addEventListener('change', loadMode);
-  loadMode();
-  </script>
-</body>
-</html>
+  const j = await res.json();
+  if (j.ok) append('Bot: ' + j.reply); else append('Error: ' + (j.error||''));
+});
+document.getElementById('bot_id').addEventListener('change', loadMode);
+loadMode();
+</script>
+</body></html>

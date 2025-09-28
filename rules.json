@@ -37,7 +37,9 @@
       "condition": "pregunta_direccion",
       "triggers": [
         "dónde queda",
+        "direccion",
         "dirección",
+        "ubicacion",
         "ubicación",
         "como llego"
       ],
@@ -51,8 +53,11 @@
         "horario",
         "horarios",
         "a qué hora abren",
+        "a que hora abren",
         "a qué hora cierran",
-        "cuando abren"
+        "a que hora cierran",
+        "cuando abren",
+        "cuándo abren"
       ],
       "action": "Nuestro horario es: {hours}.",
       "priority": 100
@@ -64,6 +69,7 @@
         "teléfono",
         "telefono",
         "numero",
+        "número",
         "llamar",
         "contacto"
       ],
@@ -79,20 +85,42 @@
         "transferencia",
         "medio de pago",
         "formas de pago",
-        "pago"
+        "pago",
+        "pagos"
       ],
       "action": "Aceptamos {payment_methods}.",
       "priority": 95
     },
     {
       "mode": "common",
+      "condition": "que_venden",
+      "triggers": [
+        "que venden",
+        "qué venden",
+        "productos",
+        "catalogo",
+        "catálogo",
+        "lista de productos",
+        "que tienen",
+        "qué tienen",
+        "que productos hay",
+        "qué productos hay"
+      ],
+      "action": "Algunos productos: {product_catalog}. Decime cuál te interesa y te confirmo precio y stock.",
+      "priority": 102
+    },
+    {
+      "mode": "common",
       "condition": "envios",
       "triggers": [
+        "envio",
         "envío",
         "envios",
+        "envíos",
         "delivery",
         "reparto",
-        "envían"
+        "envían",
+        "envian"
       ],
       "action": "Hacemos envíos en la zona. Consultá costo y tiempos según tu ubicación.",
       "priority": 90
@@ -102,8 +130,10 @@
       "condition": "devoluciones",
       "triggers": [
         "devolución",
+        "devoluciones",
         "cambio",
-        "garantía"
+        "garantía",
+        "garantia"
       ],
       "action": "Política: {cancellation_policy}.",
       "priority": 85
@@ -116,10 +146,25 @@
         "facebook",
         "redes",
         "pagina",
-        "página"
+        "página",
+        "web",
+        "sitio"
       ],
       "action": "Podés seguirnos en nuestras redes. Si querés te comparto los links.",
       "priority": 80
+    },
+    {
+      "mode": "common",
+      "condition": "ayuda",
+      "triggers": [
+        "ayuda",
+        "no entiendo",
+        "ayudame",
+        "qué puedo hacer",
+        "que puedo hacer"
+      ],
+      "action": "Puedo responder sobre {hours}, {address}, medios de pago, productos y reservas. Decime qué necesitás.",
+      "priority": 75
     }
   ],
   "sales": [
@@ -143,6 +188,7 @@
         "precio",
         "cuesta",
         "cuánto sale",
+        "cuanto sale",
         "valor"
       ],
       "action": "{product_name} cuesta ${price}.",
@@ -179,7 +225,8 @@
       "triggers": [
         "hay turno",
         "disponibilidad",
-        "está libre"
+        "está libre",
+        "esta libre"
       ],
       "action": "Verifico disponibilidad para {date_time}.",
       "priority": 100
@@ -210,7 +257,8 @@
       "condition": "tarde",
       "triggers": [
         "llego tarde",
-        "me atraso"
+        "me atraso",
+        "voy tarde"
       ],
       "action": "Podemos esperar hasta 10 minutos según disponibilidad. Si preferís, reprogramamos.",
       "priority": 80
@@ -220,10 +268,22 @@
       "condition": "confirmacion",
       "triggers": [
         "confirmar turno",
-        "confirmación"
+        "confirmación",
+        "confirmacion"
       ],
       "action": "Confirmado. Te espero en {address}.",
       "priority": 80
+    },
+    {
+      "mode": "reservations",
+      "condition": "servicios",
+      "triggers": [
+        "servicios",
+        "que servicios ofrecen",
+        "qué servicios ofrecen"
+      ],
+      "action": "Servicios: {service_list}.",
+      "priority": 90
     }
   ]
 }

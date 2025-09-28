@@ -1,11 +1,6 @@
-# Dual-mode Bot (Ventas / Reservas)
+# Assistant Bot Prod (Ventas / Reservas) v2
 
-Bot listo para Railway. No inventa datos. Usa DB para respuestas y LLM solo para detectar intención y redactar breve.
-
-## Requisitos
-- Node 18+
-- PostgreSQL (dos instancias o dos DB)
-- Variables en `.env`
+Multi-tenant. Grounding en DB. NLU acotado. Fallbacks semánticos. Listo para Railway.
 
 ## Setup
 ```bash
@@ -14,20 +9,23 @@ npm i
 npm run init:db
 npm run dev
 ```
+Seteá en Railway `OPENAI_API_KEY`, `BOT_DB_URL`, `BUSINESS_DB_URL` y `PORT`.
 
-## Endpoints
-- `GET /api/config?bot_id=default`
-- `POST /api/config` body parcial para actualizar campos
-- `GET/POST/PUT/DELETE /api/rules`
-- `POST /api/rules/restore-defaults`
-- `GET/POST /api/products`
-- `GET /api/appointments`
-- `GET /api/appointments/available?starts_at=YYYY-MM-DDTHH:mm:ss`
-- `POST /api/appointments`
-- `POST /api/chat` { bot_id, message }
+## Endpoints clave
+- `GET /healthz`
+- `GET /api/config?bot_id=ID`
+- `POST /api/config` body parcial: `{ bot_id, mode, name, address, hours, phone, payment_methods, cash_discount, service_list, cancellation_policy, slot_minutes }`
+- `POST /api/rules/restore-defaults` con `{ bot_id }` opcional
+- `GET /api/products?bot_id=ID`, `POST /api/products` `{ bot_id, name, price, stock }`
+- `GET /api/appointments?bot_id=ID`, `POST /api/appointments` `{ bot_id, customer, starts_at, notes }`
+- `GET /api/appointments/available?bot_id=ID&starts_at=YYYY-MM-DDTHH:mm:ss`
+- `POST /api/chat` `{ bot_id, message }`
 
-## Campos de `bot_configs`
-`mode,name,address,hours,phone,payment_methods,cash_discount,service_list,cancellation_policy`
-
-## Front
-Abrí `/` y usá los paneles de Productos, Reservas y Reglas.
+## Seguridad y robustez
+- `helmet`, rate limit 180 rpm, body limit 512kb
+- Validación con Zod
+- IA con `gpt-4o-mini` solo para intención y redacción; contexto estricto
+- Fallback sin IA por modo
+- Coincidencia exacta, semántica (Jaccard), y guardas de placeholders
+- Multi-tenant total: `bot_id` en productos, reglas y turnos
+- Slot configurable: `slot_minutes`

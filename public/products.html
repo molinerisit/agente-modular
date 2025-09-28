@@ -3,6 +3,7 @@
 <body style="font-family:system-ui;max-width:800px;margin:24px auto">
 <h2>Productos</h2>
 <form id="f">
+  <label>Bot ID: <input name="bot_id" value="default" /></label><br/>
   <input name="name" placeholder="Nombre" required />
   <input name="price" type="number" step="0.01" placeholder="Precio" required />
   <input name="stock" type="number" placeholder="Stock" required />
@@ -11,7 +12,8 @@
 <ul id="list"></ul>
 <script>
 async function load(){
-  const res = await fetch('/api/products'); const data = await res.json();
+  const bot_id = document.querySelector('input[name="bot_id"]').value || 'default';
+  const res = await fetch('/api/products?bot_id='+encodeURIComponent(bot_id)); const data = await res.json();
   const list = document.getElementById('list'); list.innerHTML='';
   data.forEach(p=>{
     const li = document.createElement('li');
@@ -25,6 +27,7 @@ document.getElementById('f').addEventListener('submit', async (e)=>{
   await fetch('/api/products',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
+      bot_id: f.bot_id.value || 'default',
       name: f.name.value,
       price: parseFloat(f.price.value),
       stock: parseInt(f.stock.value)

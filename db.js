@@ -1,18 +1,21 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-const botPool = new Pool({ connectionString: process.env.BOT_DB_URL, ssl: process.env.BOT_DB_URL?.includes('railway.app') ? { rejectUnauthorized: false } : undefined });
-const businessPool = new Pool({ connectionString: process.env.BUSINESS_DB_URL, ssl: process.env.BUSINESS_DB_URL?.includes('railway.app') ? { rejectUnauthorized: false } : undefined });
+function sslOpt(url){
+  if(process.env.PGSSLMODE === 'require') return { rejectUnauthorized: false };
+  if(!url) return undefined;
+  return url.includes('railway.app') ? { rejectUnauthorized: false } : undefined;
+}
 
-async function queryBotDB(text, params){
-  const c = await botPool.connect();
+const botPool = new Pool({ connectionString: process.env.BOT_DB_URL, ssl: sslOpt(process.env.BOT_DB_URL) });
+const businessPool = new Pool({ connectionString: process.env.BUSINESS_DB_URL, ssl: sslOpt(process.env.BUSINESS_DB_URL) });
+
+async function query(pool, text, params){
+  const c = await pool.connect();
   try{ const r = await c.query(text, params); return r.rows; }
   finally{ c.release(); }
 }
-async function queryBusinessDB(text, params){
-  const c = await businessPool.connect();
-  try{ const r = await c.query(text, params); return r.rows; }
-  finally{ c.release(); }
-}
+const queryBotDB = (t,p)=> query(botPool,t,p);
+const queryBusinessDB = (t,p)=> query(businessPool,t,p);
 
 module.exports = { queryBotDB, queryBusinessDB };

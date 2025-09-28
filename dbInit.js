@@ -14,13 +14,13 @@ async function initBotDB(){
       payment_methods TEXT,
       cash_discount TEXT,
       service_list TEXT,
-      cancellation_policy TEXT
-    );
-  `, []);
-  // ensure default row
-  const r = await queryBotDB('SELECT 1 FROM bot_configs WHERE bot_id=$1', ['default']);
-  if(!r.length){
-    await queryBotDB('INSERT INTO bot_configs(bot_id,mode) VALUES($1,$2)', ['default','sales']);
+      cancellation_policy TEXT,
+      slot_minutes INTEGER NOT NULL DEFAULT 30
+    );`, []);
+
+  const exists = await queryBotDB('SELECT 1 FROM bot_configs WHERE bot_id=$1', ['default']);
+  if(!exists.length){
+    await queryBotDB('INSERT INTO bot_configs(bot_id,mode,slot_minutes) VALUES($1,$2,$3)', ['default','sales',30]);
   }
 }
 
@@ -28,35 +28,45 @@ async function initBusinessDB(){
   await queryBusinessDB(`
     CREATE TABLE IF NOT EXISTS products(
       id SERIAL PRIMARY KEY,
+      bot_id TEXT NOT NULL DEFAULT 'default',
       name TEXT NOT NULL,
       price NUMERIC(12,2) NOT NULL DEFAULT 0,
       stock INTEGER NOT NULL DEFAULT 0
     );
+    CREATE INDEX IF NOT EXISTS idx_products_bot ON products(bot_id);
+
     CREATE TABLE IF NOT EXISTS appointments(
       id SERIAL PRIMARY KEY,
+      bot_id TEXT NOT NULL DEFAULT 'default',
       customer TEXT NOT NULL,
       starts_at TIMESTAMP NOT NULL,
       notes TEXT
     );
+    CREATE INDEX IF NOT EXISTS idx_appointments_bot ON appointments(bot_id);
+    CREATE INDEX IF NOT EXISTS idx_appointments_start ON appointments(starts_at);
+
     CREATE TABLE IF NOT EXISTS business_rules(
       id SERIAL PRIMARY KEY,
+      bot_id TEXT NOT NULL DEFAULT 'default',
       mode TEXT NOT NULL,
       condition TEXT NOT NULL,
       triggers JSONB,
       action TEXT NOT NULL,
       priority INTEGER NOT NULL DEFAULT 50
     );
+    CREATE INDEX IF NOT EXISTS idx_rules_bot ON business_rules(bot_id);
   `, []);
-  const cnt = await queryBusinessDB('SELECT COUNT(*)::int AS c FROM business_rules', []);
+
+  // seed defaults if empty
+  const cnt = await queryBusinessDB('SELECT COUNT(*)::int AS c FROM business_rules WHERE bot_id=$1', ['default']);
   if(!cnt[0] || cnt[0].c === 0){
-    const fs = require('fs');
-    const path = require('path');
-    const defaults = JSON.parse(fs.readFileSync(path.join(__dirname,'rules.json'), 'utf-8'));
+    const fs = require('fs'); const path = require('path');
+    const defaults = JSON.parse(fs.readFileSync(path.join(__dirname,'rules.json'),'utf-8'));
     const all = [...(defaults.common||[]), ...(defaults.sales||[]), ...(defaults.reservations||[])];
     for(const r of all){
       await queryBusinessDB(
-        'INSERT INTO business_rules(mode,condition,triggers,action,priority) VALUES($1,$2,$3,$4,$5)',
-        [r.mode, r.condition, JSON.stringify(r.triggers||[]), r.action, r.priority||50]
+        'INSERT INTO business_rules(bot_id,mode,condition,triggers,action,priority) VALUES($1,$2,$3,$4,$5,$6)',
+        ['default', r.mode, r.condition, JSON.stringify(r.triggers||[]), r.action, r.priority||50]
       );
     }
   }
